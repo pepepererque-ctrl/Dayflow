@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="DayFlow: tu sistema personal de productividad para tareas, hábitos, metas, agenda y enfoque."
+    />
+    <meta name="theme-color" content="#E2563C" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="DayFlow" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <title>DayFlow</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23E2563C'/%3E%3Cpath d='M9 20.5c2.2-6 4.4-9 6.6-9s2.6 3 .8 5.2c-1.7 2.2-4.6 2.3-4.6 2.3M16.5 20.5c2.5 0 4.6-1.6 6.5-4.8' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' fill='none'/%3E%3C/svg%3E"
+    />
+    <script>
+      // Apply the persisted theme before first paint to avoid a flash.
+      try {
+        var raw = localStorage.getItem('dayflow.state.v1')
+        var mode = raw ? (JSON.parse(raw).settings || {}).theme : 'system'
+        var dark =
+          mode === 'dark' ||
+          ((!mode || mode === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', !!dark)
+      } catch (e) {}
+    </script>
+  </head>
+  <body class="h-full">
+    <div id="root" class="h-full"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

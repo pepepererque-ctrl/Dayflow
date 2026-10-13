@@ -1,0 +1,311 @@
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------ *
+ * Identidad visual de DayFlow
+ *
+ * Fondo de pizarra fría, tinta casi negra y un único acento "brasa".
+ * El acento cálido sobre neutros fríos hace que el naranja se lea como
+ * decisión y no como tinte general; antes todo era crema sobre crema y
+ * las separaciones desaparecían.
+ *
+ * Todo es un token semántico, así que claro y oscuro van sincronizados.
+ * ------------------------------------------------------------------ */
+
+:root {
+  color-scheme: light;
+
+  --canvas: #f3f4f7;
+  --surface: #ffffff;
+  --surface-2: #eceef2;
+  --surface-3: #dfe3e9;
+  --line: #e1e5eb;
+  --line-strong: #c6ccd6;
+
+  --ink: #12151a;
+  --ink-2: #4a525f;
+  /* Auditado: el gris más claro que aún supera AA (4.5:1) sobre lienzo,
+     superficie y superficie-2. Un tono más claro se caía en las tarjetas. */
+  --ink-3: #5b626f;
+
+  --brand: #e2563c;
+  /* Las superficies rellenas que llevan texto necesitan un tono más
+     profundo para superar AA sobre blanco. */
+  --brand-solid: #cf4526;
+  --brand-hover: #b83a1a;
+  --brand-ink: #b8401f;
+  --brand-soft: #fdece7;
+  --brand-ring: rgb(226 86 60 / 32%);
+  --on-brand: #ffffff;
+
+  /* Los colores de categoría también se usan como texto en los chips, así que
+     todos están ajustados para superar AA sobre superficie y superficie-2. */
+  --cat-violet: #6d54e0;
+  --cat-teal: #097470;
+  --cat-amber: #96600a;
+  --cat-rose: #bd3565;
+  --cat-sky: #1c66bd;
+  --cat-emerald: #0f7a4d;
+  --cat-indigo: #4553cc;
+  --cat-slate: #5f6877;
+
+  --good: #0f7a4d;
+  --warn: #96600a;
+  --bad: #c33330;
+
+  /* Los bordes hacen el trabajo de separación; la sombra solo insinúa
+     altura. La elevación de verdad se reserva a menús y diálogos. */
+  --shadow-card: 0 1px 2px rgb(16 20 28 / 4%);
+  --shadow-raised: 0 1px 2px rgb(16 20 28 / 5%), 0 4px 12px -4px rgb(16 20 28 / 7%);
+  --shadow-pop: 0 8px 16px -6px rgb(16 20 28 / 12%), 0 16px 32px -12px rgb(16 20 28 / 14%);
+  --shadow-modal: 0 24px 60px -16px rgb(16 20 28 / 28%);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --canvas: #0d0f13;
+  --surface: #15181e;
+  --surface-2: #1c2027;
+  --surface-3: #262b34;
+  --line: #232830;
+  --line-strong: #39404b;
+
+  --ink: #eef1f6;
+  --ink-2: #a2abb9;
+  /* Mismo criterio que en claro: AA sobre las cuatro superficies oscuras. */
+  --ink-3: #909aa9;
+
+  --brand: #f2724f;
+  --brand-solid: #ee6a45;
+  --brand-hover: #ff835f;
+  --brand-ink: #ff8f6e;
+  --brand-soft: #2a1710;
+  --brand-ring: rgb(242 114 79 / 38%);
+  --on-brand: #170a05;
+
+  --cat-violet: #a58bff;
+  --cat-teal: #2dd4bf;
+  --cat-amber: #f0b445;
+  --cat-rose: #fb7fa8;
+  --cat-sky: #6aacf7;
+  --cat-emerald: #4ade9c;
+  --cat-indigo: #8b93ff;
+  --cat-slate: #9aa3b2;
+
+  --good: #4ade9c;
+  --warn: #f0b445;
+  --bad: #f87171;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 32%);
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 36%), 0 4px 12px -4px rgb(0 0 0 / 40%);
+  --shadow-pop: 0 8px 16px -6px rgb(0 0 0 / 48%), 0 16px 32px -12px rgb(0 0 0 / 44%);
+  --shadow-modal: 0 24px 60px -16px rgb(0 0 0 / 68%);
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+
+  --color-brand: var(--brand);
+  --color-brand-solid: var(--brand-solid);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-on-brand: var(--on-brand);
+
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-modal: var(--shadow-modal);
+
+  --font-sans:
+    'Geist Variable', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Escala tipográfica. Un paso por intención, sin tamaños sueltos. */
+  --text-2xs: 0.6875rem; /* 11 */
+  --text-2xs--line-height: 0.9375rem;
+  --text-xs: 0.75rem; /* 12 */
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem; /* 13 */
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.875rem; /* 14 */
+  --text-base--line-height: 1.25rem;
+  --text-md: 0.9375rem; /* 15 */
+  --text-md--line-height: 1.375rem;
+  --text-lg: 1.0625rem; /* 17 */
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.25rem; /* 20 */
+  --text-xl--line-height: 1.625rem;
+  --text-2xl: 1.5rem; /* 24 */
+  --text-2xl--line-height: 1.875rem;
+  --text-3xl: 1.875rem; /* 30 */
+  --text-3xl--line-height: 2.125rem;
+  --text-4xl: 2.375rem; /* 38 */
+  --text-4xl--line-height: 2.5rem;
+
+  /* Una sola escala de radios: entradas, controles, tarjetas, diálogos. */
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.375rem;
+
+  --animate-rise: rise 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop: pop 0.16s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade: fade 0.18s ease-out both;
+  --animate-sheet: sheet 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes sheet {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--brand-ring);
+    color: var(--ink);
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Las cifras de marcadores y temporizadores no deben bailar. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-3);
+    background-clip: content-box;
+    border: 3px solid transparent;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .safe-b {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  /* Etiqueta corta en versales. Un solo sitio la define, así que el
+     interletrado no se va desviando de una pantalla a otra. */
+  .eyebrow {
+    font-size: var(--text-2xs);
+    line-height: var(--text-2xs--line-height);
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
