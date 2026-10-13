@@ -172,3 +172,16 @@ export function isValidISODate(value: unknown): value is ISODate {
 export function isValidClock(value: unknown): value is Clock {
   return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value)
 }
+
+/** «octubre»: el mes en minúscula, como título de la agenda. */
+export function monthName(iso: ISODate): string {
+  return fromISO(iso).toLocaleDateString(activeLocale(), { month: 'long' })
+}
+
+/** «OCT»: el mes (0-11) abreviado, para los botones del selector de mes. */
+export function monthShort(month: number): string {
+  return new Date(2024, month, 1)
+    .toLocaleDateString(activeLocale(), { month: 'short' })
+    .replace('.', '')
+    .toUpperCase()
+}

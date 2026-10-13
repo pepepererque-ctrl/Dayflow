@@ -1097,6 +1097,30 @@ export const es = {
   'subjects.editSchedule': 'Editar horario',
   'planner.legendClass': 'Clase',
 
+  /* ------------------------------- agenda -------------------------------- */
+  'agenda.menu': 'Vistas de la agenda',
+  'agenda.viewTitle': 'Vista',
+  'agenda.viewMonth': 'Mes',
+  'agenda.viewWeek': 'Semana',
+  'agenda.viewDay': 'Día',
+  'agenda.pickMonth': 'Elegir mes',
+  'agenda.prevYear': 'Año anterior',
+  'agenda.nextYear': 'Año siguiente',
+  'agenda.prevMonth': 'Mes anterior',
+  'agenda.nextMonth': 'Mes siguiente',
+  'agenda.goToday': 'Ir a hoy',
+  'agenda.search': 'Buscar',
+  'agenda.addOn': (v: { date: string }) => `Añadir ${v.date}`,
+  'agenda.allDay': 'Todo el día',
+  'agenda.empty': 'Nada planificado este día.',
+  'agenda.emptyHint': 'Toca para añadir algo.',
+  'agenda.items': (v: { n: number }) => (v.n === 1 ? '1 elemento' : `${v.n} elementos`),
+  'agenda.dayCell': (v: { date: string; n: number }) =>
+    v.n ? `${v.date}, ${v.n === 1 ? '1 elemento' : `${v.n} elementos`}` : v.date,
+  'agenda.examBadge': 'Examen',
+  'agenda.completeBlock': (v: { title: string }) => `Marcar «${v.title}» como hecho`,
+  'agenda.reopenBlock': (v: { title: string }) => `Marcar «${v.title}» como pendiente`,
+
   /* ------------------------- paleta de comandos ------------------------- */
   'palette.open': 'Buscar o crear',
   'palette.label': 'Buscar, ir a o crear una tarea',

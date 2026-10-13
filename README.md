@@ -39,6 +39,7 @@ raíz de un dominio o en una subcarpeta, sin reglas de reescritura.
 - **Horario**: clases semanales con varios días a la vez, tipo, aula, periodo de clases y días sin clase.
 - **Captura rápida y `Ctrl+K`**: «entrega SI viernes 23:59 !alta ~2h» crea la tarea entendiendo fecha,
   hora, prioridad, asignatura y duración. La paleta también busca y navega.
+- **Agenda**: como el calendario del móvil: mes en cuadrícula de colores con el detalle del día debajo, más semana y día con rejilla de horas.
 - **Tareas**: lista y tablero, filtros, arrastrar y soltar (en escritorio).
 - **Hábitos, metas, agenda semanal, modo enfoque (pomodoro) y análisis.**
 - **App instalable y avisos**: se instala en el móvil u ordenador, abre sin conexión y avisa de clases,

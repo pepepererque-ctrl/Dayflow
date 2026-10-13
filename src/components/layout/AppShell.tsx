@@ -251,7 +251,12 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Opaca a propósito: con la barra translúcida el contenido que pasa
             por detrás se leía como texto encima de la navegación. */}
-        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 md:hidden">
+        <header
+          className={cn(
+            'sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 md:hidden',
+            route === 'planner' && 'hidden',
+          )}
+        >
           <a href="#/today" className="-my-2 flex min-w-0 items-center gap-2 py-2">
             <LogoMark size={26} />
             <span className="truncate text-md font-semibold tracking-[-0.02em]">

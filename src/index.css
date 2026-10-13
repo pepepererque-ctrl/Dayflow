@@ -201,6 +201,27 @@
     opacity: 1;
   }
 }
+/* Al cambiar de mes, la cuadrícula entra desde el lado hacia el que se ha ido. */
+@keyframes agenda-in-next {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes agenda-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @keyframes sheet {
   from {
     opacity: 0;

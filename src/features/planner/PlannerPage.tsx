@@ -1,10 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
-import { CalendarRange, Check, ChevronLeft, ChevronRight, ClipboardCheck, Plus } from 'lucide-react'
-import { PageHeader } from '@/components/layout/AppShell'
+import { CalendarRange, Check, ChevronLeft, ChevronRight, ClipboardCheck } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { Segmented } from '@/components/ui/Segmented'
 import { useToast } from '@/components/ui/Toast'
 import { cn } from '@/lib/cn'
 import { BLOCK_CATEGORIES, BLOCK_CATEGORY_KEYS, CLASS_KINDS, colorVar } from '@/lib/constants'
@@ -69,16 +67,26 @@ function clampRange(
   return { startHour: Math.max(0, Math.floor(min / 60) - 1), endHour: Math.min(24, Math.ceil(max / 60) + 1) }
 }
 
-export function PlannerPage() {
+/**
+ * Las vistas de semana y de día: la rejilla de horas. La cabecera, el cambio de
+ * vista y el botón de añadir los pone la página de la agenda.
+ */
+export function TimeGridView({
+  anchor,
+  mode,
+  onAnchor: setAnchor,
+  onOpenDay,
+}: {
+  anchor: ISODate
+  mode: 'week' | 'day'
+  onAnchor: (date: ISODate) => void
+  /** Pulsar la cabecera de un día lleva a la vista de ese día. */
+  onOpenDay: (date: ISODate) => void
+}) {
   const { state, dispatch, today } = useApp()
   const { toast } = useToast()
   const t = useT()
 
-  const [anchor, setAnchor] = useState<ISODate>(today)
-  // A 7-column grid needs horizontal scrolling on a phone, so start on one day.
-  const [mode, setMode] = useState<'week' | 'day'>(() =>
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 'day' : 'week',
-  )
   const [editing, setEditing] = useState<TimeBlock | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [defaults, setDefaults] = useState<{ date: string; start: string; end: string } | undefined>()
@@ -166,35 +174,13 @@ export function PlannerPage() {
       : `${formatShortDate(days[0])} - ${formatShortDate(days[days.length - 1])}`
 
   const shift = (delta: number) =>
-    setAnchor((a) => (mode === 'week' ? addDays(startOfWeek(a, weekStartsOn), delta * 7) : addDays(a, delta)))
+    setAnchor(mode === 'week' ? addDays(startOfWeek(anchor, weekStartsOn), delta * 7) : addDays(anchor, delta))
 
   const nowMinutes = minutesFromClock(nowClock())
   const showNowLine = nowMinutes >= rangeStart && nowMinutes <= endHour * 60
 
   return (
     <>
-      <PageHeader
-        title={t('planner.title')}
-        subtitle={t('planner.subtitle')}
-        actions={
-          <>
-            <Segmented
-              ariaLabel={t('planner.rangeLabel')}
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'week', label: t('common.week') },
-                { value: 'day', label: t('common.day') },
-              ]}
-            />
-            <Button variant="primary" onClick={() => openNew(mode === 'day' ? anchor : today, 9 * 60)}>
-              <Plus size={16} />
-              {t('planner.new')}
-            </Button>
-          </>
-        }
-      />
-
       {/* ------------------------------ controls ----------------------------- */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
@@ -252,10 +238,7 @@ export function PlannerPage() {
                   <button
                     key={date}
                     type="button"
-                    onClick={() => {
-                      setAnchor(date)
-                      setMode('day')
-                    }}
+                    onClick={() => onOpenDay(date)}
                     className={cn(
                       'flex flex-col items-center gap-0.5 border-l border-line py-2.5 transition-colors hover:bg-surface-2',
                     )}

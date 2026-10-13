@@ -18,7 +18,7 @@ import { HabitDetailPage, HabitsPage } from '@/features/habits/HabitsPage'
 import { Onboarding } from '@/features/onboarding/Onboarding'
 import { CommandPalette } from '@/features/palette/CommandPalette'
 import { NotificationScheduler } from '@/features/notifications/NotificationScheduler'
-import { PlannerPage } from '@/features/planner/PlannerPage'
+import { AgendaPage } from '@/features/agenda/AgendaPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { SubjectDetailPage, SubjectsPage } from '@/features/subjects/SubjectsPage'
 import { TasksPage } from '@/features/tasks/TasksPage'
@@ -88,7 +88,7 @@ function Routes() {
       case 'goals':
         return route.param ? <GoalDetailPage goalId={route.param} /> : <GoalsPage />
       case 'planner':
-        return <PlannerPage />
+        return <AgendaPage />
       case 'exams':
         return <ExamsPage />
       case 'timetable':
