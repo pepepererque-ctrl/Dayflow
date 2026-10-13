@@ -18,7 +18,8 @@ import { openPalette } from '@/lib/palette'
 import { navigate } from '@/lib/router'
 import { useApp } from '@/store/AppStore'
 import { useT } from '@/i18n/I18nProvider'
-import type { ISODate, Task, TimeBlock } from '@/types'
+import type { ISODate, Task, TaskStatus, TimeBlock } from '@/types'
+import type { QuickDraft } from '@/lib/quickCreate'
 import { BlockEditor } from '../planner/BlockEditor'
 import { TimeGridView } from '../planner/PlannerPage'
 import { TaskDetail } from '../tasks/TaskDetail'
@@ -26,6 +27,7 @@ import { TaskEditor } from '../tasks/TaskEditor'
 import { DayPanel } from './DayPanel'
 import { MonthPicker } from './MonthPicker'
 import { MonthView } from './MonthView'
+import { QuickAddSheet, type QuickMore } from './QuickAddSheet'
 
 type View = 'month' | 'week' | 'day'
 
@@ -85,7 +87,15 @@ export function AgendaPage() {
 
   const [editingBlock, setEditingBlock] = useState<TimeBlock | null>(null)
   const [blockEditorOpen, setBlockEditorOpen] = useState(false)
-  const [blockDefaults, setBlockDefaults] = useState<{ date: string; start: string; end: string } | undefined>()
+  const [blockDefaults, setBlockDefaults] = useState<
+    | { date: string; start: string; end: string; title?: string; subjectId?: string; category?: TimeBlock['category'] }
+    | undefined
+  >()
+  // Cuadro rápido de «Añadir»; `pressedMinutes` es la hora pulsada en la rejilla, si se llegó desde ahí.
+  const [quick, setQuick] = useState<{ pressedMinutes: number | null } | null>(null)
+  const [taskDefaults, setTaskDefaults] = useState<
+    { date: string; status: TaskStatus; subjectId?: string; draft: Record<string, string> } | undefined
+  >()
   const [detailTask, setDetailTask] = useState<Task | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [taskEditorOpen, setTaskEditorOpen] = useState(false)
@@ -150,20 +160,60 @@ export function AgendaPage() {
     setPickerOpen(false)
   }
 
-  const openAdd = () => {
-    const now = new Date()
-    // Hoy: la próxima hora en punto. Otro día: cuando empieza tu jornada.
-    const start =
-      anchor === today
-        ? Math.min(22 * 60, (now.getHours() + 1) * 60)
-        : Math.max(6 * 60, minutesFromClock(state.profile.workStart))
-    setBlockDefaults({
-      date: anchor,
-      start: clockFromMinutes(start),
-      end: clockFromMinutes(Math.min(start + 60, 23 * 60 + 59)),
-    })
-    setEditingBlock(null)
-    setBlockEditorOpen(true)
+  const openAdd = () => setQuick({ pressedMinutes: null })
+
+  /** Pulsación larga (o clic) en una hora de la rejilla: se añade en ese día y a esa hora. */
+  const createAt = (date: ISODate, minutes: number) => {
+    setAnchor(date)
+    setQuick({ pressedMinutes: minutes })
+  }
+
+  /** Tras crear algo en otro día, la agenda va a ese día para que se vea. */
+  const showCreated = (date: ISODate) => {
+    if (date === anchor) return
+    setDirection(date > anchor ? 1 : -1)
+    setAnchor(date)
+  }
+
+  /** «Más opciones»: el editor completo, ya con lo que se había escrito. */
+  const openMore = (more: QuickMore) => {
+    setQuick(null)
+    const draft: QuickDraft | null = more.draft
+    if (more.kind === 'block') {
+      const block = draft && draft.kind === 'block' ? draft : null
+      const start = block
+        ? minutesFromClock(block.start)
+        : (more.pressedMinutes ??
+          (more.date === today
+            ? Math.min(22 * 60, (new Date().getHours() + 1) * 60)
+            : Math.max(6 * 60, minutesFromClock(state.profile.workStart))))
+      setBlockDefaults({
+        date: block?.date ?? more.date,
+        start: clockFromMinutes(start),
+        end: block?.end ?? clockFromMinutes(Math.min(start + 60, 23 * 60 + 59)),
+        title: block?.title,
+        subjectId: block?.subjectId ?? undefined,
+        category: block?.category,
+      })
+      setEditingBlock(null)
+      setBlockEditorOpen(true)
+    } else {
+      const task = draft && draft.kind === 'task' ? draft : null
+      const due = task?.dueDate ?? more.date
+      setTaskDefaults({
+        date: due,
+        status: due <= today ? 'today' : 'backlog',
+        subjectId: task?.subjectId ?? undefined,
+        draft: {
+          ...(task ? { title: task.title, priority: task.priority } : {}),
+          ...(task?.dueTime ? { dueTime: task.dueTime } : {}),
+          ...(task?.estimateMin ? { estimateMin: String(task.estimateMin) } : {}),
+          ...(task?.subjectId ? { category: 'learning' } : {}),
+        },
+      })
+      setEditingTask(null)
+      setTaskEditorOpen(true)
+    }
   }
 
   const openItem = (item: AgendaItem) => {
@@ -259,6 +309,7 @@ export function AgendaPage() {
             changeView('day')
           }}
           onSwipe={goPeriod}
+          onCreate={createAt}
         />
       )}
 
@@ -321,6 +372,15 @@ export function AgendaPage() {
         </ul>
       </Sheet>
 
+      <QuickAddSheet
+        open={quick !== null}
+        onClose={() => setQuick(null)}
+        date={anchor}
+        pressedMinutes={quick?.pressedMinutes ?? null}
+        onCreated={showCreated}
+        onMore={openMore}
+      />
+
       <BlockEditor
         open={blockEditorOpen}
         onClose={() => {
@@ -344,8 +404,13 @@ export function AgendaPage() {
         onClose={() => {
           setTaskEditorOpen(false)
           setEditingTask(null)
+          setTaskDefaults(undefined)
         }}
         task={editingTask}
+        defaultDate={taskDefaults?.date}
+        defaultStatus={taskDefaults?.status}
+        defaultSubjectId={taskDefaults?.subjectId}
+        defaultDraft={taskDefaults?.draft}
       />
     </>
   )

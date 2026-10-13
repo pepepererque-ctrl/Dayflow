@@ -17,6 +17,10 @@ export interface ParsedTask {
   title: string
   dueDate: ISODate | null
   dueTime: Clock | null
+  /** Fin de la franja si se escribió una («16:00-17:30»); entonces `dueTime` es el inicio. */
+  endTime: Clock | null
+  /** El día se escribió en el texto (frente a quedar por defecto en hoy porque había una hora). */
+  dateExplicit: boolean
   priority: Priority | null
   subjectId: string | null
   estimateMin: number | null
@@ -190,6 +194,34 @@ function takeDate(work: string, today: ISODate): { value: ISODate; rest: string 
 const clock = (h: number, m: number): Clock | null =>
   h >= 0 && h <= 23 && m >= 0 && m <= 59 ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}` : null
 
+/**
+ * Una franja: «16:00-17:30», «16:00 a 17:30», «de 16 a 18», «de 9:30 a 11».
+ * Sin «de», las dos horas llevan minutos: así «ejercicios 3-4» no se lee como
+ * una franja de 3:00 a 4:00.
+ */
+function takeRange(work: string): { value: { start: Clock; end: Clock }; rest: string } | null {
+  const build = (h1: string, m1: string | undefined, h2: string, m2: string | undefined) => {
+    const start = clock(Number(h1), m1 ? Number(m1) : 0)
+    const end = clock(Number(h2), m2 ? Number(m2) : 0)
+    return start && end && end > start ? { start, end } : null
+  }
+
+  const colon = take(
+    work,
+    new RegExp(`${START}(\\d{1,2}):(\\d{2})\\s*(?:-|–|—|a|hasta)\\s*(\\d{1,2}):(\\d{2})${END}`),
+    (m) => build(m[1], m[2], m[3], m[4]),
+  )
+  if (colon) return colon
+
+  return take(
+    work,
+    new RegExp(
+      `${START}de\\s+(\\d{1,2})(?::(\\d{2}))?\\s*(?:a|hasta)\\s*(?:las\\s+)?(\\d{1,2})(?::(\\d{2}))?\\s*h?${END}`,
+    ),
+    (m) => build(m[1], m[2], m[3], m[4]),
+  )
+}
+
 function takeTime(work: string): { value: Clock; rest: string } | null {
   // «a las 5 de la tarde», «a las 10:30», «a las 9h»
   const spoken = take(
@@ -308,6 +340,8 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedTask {
     title: '',
     dueDate: null,
     dueTime: null,
+    endTime: null,
+    dateExplicit: false,
     priority: null,
     subjectId: null,
     estimateMin: null,
@@ -339,16 +373,25 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedTask {
     out.recognized++
   }
 
-  const time = takeTime(work)
-  if (time) {
-    out.dueTime = time.value
-    work = time.rest
+  const range = takeRange(work)
+  if (range) {
+    out.dueTime = range.value.start
+    out.endTime = range.value.end
+    work = range.rest
     out.recognized++
+  } else {
+    const time = takeTime(work)
+    if (time) {
+      out.dueTime = time.value
+      work = time.rest
+      out.recognized++
+    }
   }
 
   const date = takeDate(work, ctx.today)
   if (date) {
     out.dueDate = date.value
+    out.dateExplicit = true
     work = date.rest
     out.recognized++
   }

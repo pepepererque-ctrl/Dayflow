@@ -81,6 +81,7 @@ export function TimeGridView({
   onAnchor: setAnchor,
   onOpenDay,
   onSwipe,
+  onCreate,
 }: {
   anchor: ISODate
   mode: 'week' | 'day'
@@ -92,6 +93,8 @@ export function TimeGridView({
   onOpenDay: (date: ISODate) => void
   /** +1 = siguiente semana o día, -1 = anterior. */
   onSwipe: (delta: 1 | -1) => void
+  /** Crear algo en ese día y hora: clic en el ordenador, pulsación larga en el móvil. */
+  onCreate: (date: ISODate, minutes: number) => void
 }) {
   const { state, dispatch, today } = useApp()
   const { toast } = useToast()
@@ -99,13 +102,18 @@ export function TimeGridView({
 
   const [editing, setEditing] = useState<TimeBlock | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
-  const [defaults, setDefaults] = useState<{ date: string; start: string; end: string } | undefined>()
   const [drag, setDrag] = useState<{ id: string; grabOffsetMin: number } | null>(null)
   const [detailTask, setDetailTask] = useState<Task | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [taskEditorOpen, setTaskEditorOpen] = useState(false)
   const gridRef = useRef<HTMLDivElement>(null)
   const touch = useRef<{ x: number; y: number } | null>(null)
+  const press = useRef<{ timer: number; x: number; y: number } | null>(null)
+
+  const cancelPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer)
+    press.current = null
+  }
 
   const weekStartsOn = state.settings.weekStartsOn
   const days = useMemo(
@@ -165,20 +173,8 @@ export function TimeGridView({
   const totalMinutes = (endHour - startHour) * 60
   const gridHeight = (totalMinutes / 60) * HOUR_H
 
-  const openNew = (date: ISODate, startMin: number) => {
-    const snapped = Math.round(startMin / SNAP) * SNAP
-    setEditing(null)
-    setDefaults({
-      date,
-      start: clockFromMinutes(snapped),
-      end: clockFromMinutes(Math.min(snapped + 60, DAY_MINUTES - 1)),
-    })
-    setEditorOpen(true)
-  }
-
   const openExisting = (block: TimeBlock) => {
     setEditing(block)
-    setDefaults(undefined)
     setEditorOpen(true)
   }
 
@@ -385,9 +381,11 @@ export function TimeGridView({
             </div>
 
             {days.map((date) => {
-              const dayBlocks = visibleBlocks
-                .filter((b) => b.date === date)
-                .sort((a, b) => minutesFromClock(a.start) - minutesFromClock(b.start))
+              const dayBlocks = layoutLanes(
+                visibleBlocks
+                  .filter((b) => b.date === date)
+                  .map((b) => ({ block: b, start: minutesFromClock(b.start), end: minutesFromClock(b.end) })),
+              )
               const dayTasks = timedTasks.filter((t) => t.dueDate === date)
               const dayClasses = layoutLanes(visibleClasses.filter((c) => c.date === date))
 
@@ -424,7 +422,7 @@ export function TimeGridView({
                   }}
                   onDoubleClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect()
-                    openNew(date, minutesFromPointer(e.clientY, rect.top))
+                    onCreate(date, minutesFromPointer(e.clientY, rect.top))
                   }}
                 >
                   {/* Líneas de hora (continuas) y de media hora (punteadas); cada hora se puede pulsar para crear. */}
@@ -432,7 +430,36 @@ export function TimeGridView({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => openNew(date, (startHour + i) * 60)}
+                      // Ratón y teclado: un clic crea. En el móvil un toque suelto no crea nada
+                      // (se toca sin querer al desplazarse); hay que mantener pulsado.
+                      onClick={(e) => {
+                        const kind = (e.nativeEvent as PointerEvent).pointerType
+                        if (kind === 'touch' || kind === 'pen') return
+                        onCreate(date, (startHour + i) * 60)
+                      }}
+                      onPointerDown={(e) => {
+                        if (e.pointerType === 'mouse') return
+                        cancelPress()
+                        const minutes = (startHour + i) * 60
+                        press.current = {
+                          x: e.clientX,
+                          y: e.clientY,
+                          timer: window.setTimeout(() => {
+                            press.current = null
+                            navigator.vibrate?.(15)
+                            onCreate(date, minutes)
+                          }, 480),
+                        }
+                      }}
+                      onPointerMove={(e) => {
+                        const p = press.current
+                        // Si el dedo se mueve, es un desplazamiento y no una pulsación larga.
+                        if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) cancelPress()
+                      }}
+                      onPointerUp={cancelPress}
+                      onPointerLeave={cancelPress}
+                      onPointerCancel={cancelPress}
+                      onContextMenu={(e) => e.preventDefault()}
                       aria-label={t('planner.addAt', {
                         date: formatShortDate(date),
                         time: formatClock(clockFromMinutes((startHour + i) * 60)),
@@ -516,8 +543,12 @@ export function TimeGridView({
                       )
                     })}
 
-                  {/* blocks */}
-                  {dayBlocks.map((block) => {
+                  {/* blocks: si se solapan, lado a lado, como en el calendario del móvil */}
+                  <div
+                    className="pointer-events-none absolute inset-y-0 left-0"
+                    style={{ right: mode === 'day' && dayTasks.length ? 'calc(clamp(104px, 30%, 240px) + 8px)' : 0 }}
+                  >
+                  {dayBlocks.map(({ block, lane, lanes }) => {
                     const start = minutesFromClock(block.start)
                     const end = minutesFromClock(block.end)
                     const top = ((start - rangeStart) / 60) * HOUR_H
@@ -552,19 +583,17 @@ export function TimeGridView({
                         }}
                         title={`${block.title} · ${formatClock(block.start)}-${formatClock(block.end)}`}
                         className={cn(
-                          'absolute left-0.5 z-10 cursor-grab overflow-hidden rounded-lg border-l-[3px] px-1 py-1 text-left transition-shadow hover:shadow-pop active:cursor-grabbing sm:left-1 sm:px-2',
+                          'pointer-events-auto absolute z-10 cursor-grab overflow-hidden rounded-lg border-l-[3px] px-1 py-1 text-left transition-shadow hover:shadow-pop active:cursor-grabbing sm:px-2',
                           drag?.id === block.id && 'opacity-50',
                           block.done && 'opacity-70',
                         )}
                         style={{
                           top,
                           height,
-                          // En el día, las tareas con hora tienen su carril a la derecha;
-                          // en la semana son un punto pequeño y no quitan ancho.
-                          right:
-                            mode === 'day' && dayTasks.length
-                              ? 'calc(clamp(104px, 30%, 240px) + 8px)'
-                              : '2px',
+                          // En el día, las tareas con hora tienen su carril a la derecha (lo reserva el
+                          // contenedor); en la semana son un punto pequeño y no quitan ancho.
+                          left: `calc(${(lane / lanes) * 100}% + 2px)`,
+                          width: `calc(${100 / lanes}% - 4px)`,
                           borderLeftColor: tint,
                           background: `color-mix(in srgb, ${tint} 16%, var(--surface))`,
                         }}
@@ -611,6 +640,7 @@ export function TimeGridView({
                       </div>
                     )
                   })}
+                  </div>
 
                   {/* Tareas con hora. Discontinuo para que nunca se lean como
                       un bloque de agenda. */}
@@ -633,7 +663,7 @@ export function TimeGridView({
                           title={label}
                           aria-label={label}
                           className="absolute right-0 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-surface/80 transition-colors hover:bg-surface-2"
-                          style={{ top: Math.max(0, top) }}
+                          style={{ top: Math.max(0, Math.min(top, gridHeight - 20)) }}
                         >
                           <span
                             className={cn(
@@ -655,7 +685,7 @@ export function TimeGridView({
                           'absolute right-1 z-10 w-[clamp(104px,30%,240px)] overflow-hidden rounded-md border border-dashed bg-surface px-1.5 py-1 text-left transition-colors hover:bg-surface-2',
                           task.status === 'done' ? 'border-line text-ink-3' : 'border-line-strong',
                         )}
-                        style={{ top: Math.max(0, top), height: 48 }}
+                        style={{ top: Math.max(0, Math.min(top, gridHeight - 48)), height: 48 }}
                       >
                         <p className="tnum text-2xs leading-[1.2] text-ink-3">
                           {formatClock(task.dueTime as string)}
@@ -682,6 +712,7 @@ export function TimeGridView({
 
       {/* Hacer clic y arrastrar es cosa del ratón: en el móvil no tiene sentido. */}
       <p className="mt-3 hidden text-xs text-ink-3 md:block">{t('planner.tip')}</p>
+      <p className="mt-3 text-xs text-ink-3 md:hidden">{t('planner.tipTouch')}</p>
 
       <BlockEditor
         open={editorOpen}
@@ -690,7 +721,6 @@ export function TimeGridView({
           setEditing(null)
         }}
         block={editing}
-        defaults={defaults}
       />
       <TaskDetail
         task={detailTask}

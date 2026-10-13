@@ -35,19 +35,27 @@ export function BlockEditor({
   open: boolean
   onClose: () => void
   block: TimeBlock | null
-  defaults?: { date: string; start: string; end: string }
+  defaults?: {
+    date: string
+    start: string
+    end: string
+    /** Para abrirlo ya rellenado desde el cuadro rápido de la agenda. */
+    title?: string
+    subjectId?: string
+    category?: BlockCategory
+  }
 }) {
   const { state, dispatch } = useApp()
   const { toast } = useToast()
   const confirm = useConfirm()
   const t = useT()
   const [draft, setDraft] = useState<Draft>({
-    title: '',
+    title: defaults?.title ?? '',
     date: defaults?.date ?? '',
     start: defaults?.start ?? '09:00',
     end: defaults?.end ?? '10:00',
-    category: 'deep_work',
-    subjectId: '',
+    category: defaults?.category ?? 'deep_work',
+    subjectId: defaults?.subjectId ?? '',
     notes: '',
   })
   const [errors, setErrors] = useState<Errors>({})
@@ -67,12 +75,12 @@ export function BlockEditor({
             notes: block.notes,
           }
         : {
-            title: '',
+            title: defaults?.title ?? '',
             date: defaults?.date ?? '',
             start: defaults?.start ?? '09:00',
             end: defaults?.end ?? '10:00',
-            category: 'deep_work',
-            subjectId: '',
+            category: defaults?.category ?? 'deep_work',
+            subjectId: defaults?.subjectId ?? '',
             notes: '',
           },
     )

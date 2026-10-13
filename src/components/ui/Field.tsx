@@ -151,7 +151,9 @@ export function Switch({
     >
       <span
         className={cn(
-          'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+          // `left-0` es imprescindible: dentro de un <button> el hijo absoluto arranca centrado
+          // y el desplazamiento lo sacaba del óvalo.
+          'absolute left-0 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
           checked ? 'translate-x-[22px]' : 'translate-x-0.5',
         )}
       />

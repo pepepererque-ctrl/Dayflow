@@ -25,14 +25,14 @@ interface Draft {
 
 function toDraft(task: Task | null, defaults?: Partial<Draft>): Draft {
   return {
-    title: task?.title ?? '',
+    title: task?.title ?? defaults?.title ?? '',
     notes: task?.notes ?? '',
     status: task?.status ?? (defaults?.status as TaskStatus) ?? 'today',
-    priority: task?.priority ?? 'medium',
-    category: task?.category ?? 'work',
+    priority: task?.priority ?? defaults?.priority ?? 'medium',
+    category: task?.category ?? defaults?.category ?? 'work',
     dueDate: task?.dueDate ?? (defaults?.dueDate ?? ''),
-    dueTime: task?.dueTime ?? '',
-    estimateMin: task?.estimateMin != null ? String(task.estimateMin) : '',
+    dueTime: task?.dueTime ?? defaults?.dueTime ?? '',
+    estimateMin: task?.estimateMin != null ? String(task.estimateMin) : (defaults?.estimateMin ?? ''),
     goalId: task?.goalId ?? defaults?.goalId ?? '',
     subjectId: task?.subjectId ?? defaults?.subjectId ?? '',
   }
@@ -64,6 +64,7 @@ export function TaskEditor({
   defaultDate,
   defaultGoalId,
   defaultSubjectId,
+  defaultDraft,
 }: {
   open: boolean
   onClose: () => void
@@ -75,12 +76,20 @@ export function TaskEditor({
   defaultGoalId?: string
   /** Pre-vincula la tarea nueva a una asignatura, p. ej. desde su pantalla. */
   defaultSubjectId?: string
+  /** Campos con los que abrir una tarea nueva, p. ej. lo escrito en el cuadro rápido de la agenda. */
+  defaultDraft?: Partial<Pick<Draft, 'title' | 'dueTime' | 'priority' | 'estimateMin' | 'category'>>
 }) {
   const { state, dispatch } = useApp()
   const { toast } = useToast()
   const t = useT()
   const [draft, setDraft] = useState<Draft>(() =>
-    toDraft(task, { status: defaultStatus, dueDate: defaultDate, goalId: defaultGoalId, subjectId: defaultSubjectId }),
+    toDraft(task, {
+      ...defaultDraft,
+      status: defaultStatus,
+      dueDate: defaultDate,
+      goalId: defaultGoalId,
+      subjectId: defaultSubjectId,
+    }),
   )
   const [errors, setErrors] = useState<Errors>({})
 
@@ -88,6 +97,7 @@ export function TaskEditor({
     if (open) {
       setDraft(
         toDraft(task, {
+          ...defaultDraft,
           status: defaultStatus,
           dueDate: defaultDate,
           goalId: defaultGoalId,
@@ -96,7 +106,8 @@ export function TaskEditor({
       )
       setErrors({})
     }
-  }, [open, task, defaultStatus, defaultDate, defaultGoalId, defaultSubjectId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, task, defaultStatus, defaultDate, defaultGoalId, defaultSubjectId, JSON.stringify(defaultDraft ?? {})])
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }))
