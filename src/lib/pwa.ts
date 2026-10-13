@@ -63,6 +63,8 @@ export function initPwa(): void {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register(new URL('sw.js', document.baseURI).toString())
+      // Al abrir la app se busca un service worker nuevo, sin esperar a que el navegador lo haga.
+      .then((registration) => registration.update())
       .catch((err) => console.warn('DayFlow no pudo registrar el service worker.', err))
   })
   navigator.serviceWorker.addEventListener('controllerchange', emit)

@@ -11,7 +11,7 @@
 
 // Súbelo si cambia la estrategia de caché. Los archivos de la app llevan hash en
 // el nombre, así que una versión nueva de la app no necesita tocar esto.
-const VERSION = 'dayflow-shell-v1'
+const VERSION = 'dayflow-shell-v2'
 
 const scopeUrl = new URL(self.registration.scope)
 const here = (path) => new URL(path, scopeUrl).toString()

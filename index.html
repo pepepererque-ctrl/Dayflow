@@ -29,6 +29,72 @@
         document.documentElement.classList.toggle('dark', !!dark)
       } catch (e) {}
     </script>
+    <script>
+      // Vigilante de arranque. Si la app no pinta nada en unos segundos (un archivo que no
+      // carga, un fallo antes de arrancar, una copia vieja en caché…), una pantalla en blanco
+      // no dice nada: esto muestra el error y deja reparar la app sin borrar tus datos.
+      (function () {
+        var errors = []
+        window.addEventListener('error', function (e) {
+          // Un archivo que no carga (script o estilos) llega sin mensaje: se nombra el archivo.
+          var el = e.target
+          if (el && el !== window && (el.src || el.href)) {
+            errors.push('No se pudo cargar ' + String(el.src || el.href).split('/').pop())
+            return
+          }
+          var where = e.filename ? ' (' + String(e.filename).split('/').pop() + ':' + e.lineno + ')' : ''
+          errors.push((e.message || 'Error de carga') + where)
+        }, true)
+        window.addEventListener('unhandledrejection', function (e) {
+          errors.push('Promesa rechazada: ' + ((e.reason && e.reason.message) || e.reason))
+        })
+
+        function repair() {
+          var jobs = []
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+              return Promise.all(rs.map(function (r) { return r.unregister() }))
+            }))
+          }
+          if (window.caches) {
+            jobs.push(caches.keys().then(function (ks) {
+              return Promise.all(ks.map(function (k) { return caches.delete(k) }))
+            }))
+          }
+          Promise.all(jobs).catch(function () {}).then(function () {
+            // Solo se vacían las copias de la app; los datos (localStorage) no se tocan.
+            location.replace(location.pathname + '?r=' + Date.now() + location.hash)
+          })
+        }
+
+        setTimeout(function () {
+          var root = document.getElementById('root')
+          if (root && root.childElementCount > 0) return
+          var box = document.createElement('div')
+          box.setAttribute('role', 'alert')
+          box.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;background:#f3f4f7;color:#14181f;font:16px/1.5 system-ui,sans-serif'
+          var card = document.createElement('div')
+          card.style.cssText = 'max-width:420px;width:100%;background:#fff;border:1px solid #e1e5eb;border-radius:20px;padding:24px;text-align:center'
+          var h = document.createElement('h1')
+          h.textContent = 'DayFlow no ha podido arrancar'
+          h.style.cssText = 'margin:0 0 8px;font-size:20px'
+          var p = document.createElement('p')
+          p.textContent = 'Pulsa «Reparar» para vaciar la copia guardada de la app y recargarla. Tus datos no se borran.'
+          p.style.cssText = 'margin:0 0 16px;color:#4a5260;font-size:15px'
+          var pre = document.createElement('pre')
+          pre.textContent = errors.length ? errors.slice(0, 4).join('\n') : 'Sin error visible: la app no llegó a arrancar.'
+          pre.style.cssText = 'margin:0 0 16px;padding:12px;text-align:left;white-space:pre-wrap;word-break:break-word;background:#f3f4f7;border-radius:12px;font-size:12px;max-height:30vh;overflow:auto'
+          var b = document.createElement('button')
+          b.type = 'button'
+          b.textContent = 'Reparar y recargar'
+          b.style.cssText = 'height:44px;padding:0 20px;border:0;border-radius:12px;background:#cf4526;color:#fff;font:600 16px system-ui,sans-serif'
+          b.onclick = repair
+          card.appendChild(h); card.appendChild(p); card.appendChild(pre); card.appendChild(b)
+          box.appendChild(card)
+          document.body.appendChild(box)
+        }, 6000)
+      })()
+    </script>
   </head>
   <body class="h-full">
     <div id="root" class="h-full"></div>
