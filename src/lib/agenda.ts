@@ -168,3 +168,39 @@ export function shiftMonth(date: ISODate, delta: number): ISODate {
   target.setDate(Math.min(d.getDate(), lastDay))
   return toISO(target)
 }
+
+/* ---------------------------- qué se muestra ------------------------------ */
+
+/** Qué tipos de cosas se ven en la agenda; como los calendarios de Samsung, se pueden ocultar. */
+export interface AgendaShow {
+  classes: boolean
+  exams: boolean
+  tasks: boolean
+  blocks: boolean
+}
+
+export const DEFAULT_SHOW: AgendaShow = { classes: true, exams: true, tasks: true, blocks: true }
+
+const SHOW_FOR_KIND: Record<AgendaKind, keyof AgendaShow> = {
+  class: 'classes',
+  exam: 'exams',
+  task: 'tasks',
+  block: 'blocks',
+}
+
+export function isShown(kind: AgendaKind, show: AgendaShow): boolean {
+  return show[SHOW_FOR_KIND[kind]]
+}
+
+/** El mismo mapa de días sin lo que está oculto. Si no se oculta nada, devuelve el original. */
+export function filterAgenda(agenda: Map<ISODate, AgendaItem[]>, show: AgendaShow): Map<ISODate, AgendaItem[]> {
+  if (Object.values(show).every(Boolean)) return agenda
+  return new Map([...agenda].map(([date, items]) => [date, items.filter((i) => isShown(i.kind, show))]))
+}
+
+/** Lee lo guardado, ignorando cualquier cosa que no sea un booleano por tipo. */
+export function parseShow(raw: unknown): AgendaShow {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const pick = (key: keyof AgendaShow) => (typeof src[key] === 'boolean' ? (src[key] as boolean) : true)
+  return { classes: pick('classes'), exams: pick('exams'), tasks: pick('tasks'), blocks: pick('blocks') }
+}

@@ -1,9 +1,19 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Check, ChevronLeft, ChevronRight, Columns3, LayoutGrid, Menu, Plus, Rows3, Search } from 'lucide-react'
+import { Switch } from '@/components/ui/Field'
 import { Sheet } from '@/components/ui/Sheet'
 import { cn } from '@/lib/cn'
-import { buildAgenda, monthWeeks, shiftMonth, type AgendaItem } from '@/lib/agenda'
-import { clockFromMinutes, formatShortDate, minutesFromClock, monthName } from '@/lib/date'
+import {
+  DEFAULT_SHOW,
+  buildAgenda,
+  filterAgenda,
+  monthWeeks,
+  parseShow,
+  shiftMonth,
+  type AgendaItem,
+  type AgendaShow,
+} from '@/lib/agenda'
+import { addDays, clockFromMinutes, formatShortDate, minutesFromClock, monthName } from '@/lib/date'
 import { openPalette } from '@/lib/palette'
 import { navigate } from '@/lib/router'
 import { useApp } from '@/store/AppStore'
@@ -20,6 +30,17 @@ import { MonthView } from './MonthView'
 type View = 'month' | 'week' | 'day'
 
 const VIEW_KEY = 'dayflow.agenda.view'
+const SHOW_KEY = 'dayflow.agenda.show'
+
+const SHOW_OPTIONS: Array<{
+  key: keyof AgendaShow
+  labelKey: 'agenda.showClasses' | 'agenda.showExams' | 'agenda.showTasks' | 'agenda.showBlocks'
+}> = [
+  { key: 'classes', labelKey: 'agenda.showClasses' },
+  { key: 'exams', labelKey: 'agenda.showExams' },
+  { key: 'tasks', labelKey: 'agenda.showTasks' },
+  { key: 'blocks', labelKey: 'agenda.showBlocks' },
+]
 const VIEWS: Array<{ value: View; labelKey: 'agenda.viewMonth' | 'agenda.viewWeek' | 'agenda.viewDay'; icon: typeof Menu }> = [
   { value: 'month', labelKey: 'agenda.viewMonth', icon: LayoutGrid },
   { value: 'week', labelKey: 'agenda.viewWeek', icon: Columns3 },
@@ -37,6 +58,15 @@ function loadView(): View {
   return 'month'
 }
 
+/** Qué tipos de cosas se mostraban la última vez. */
+function loadShow(): AgendaShow {
+  try {
+    return parseShow(JSON.parse(localStorage.getItem(SHOW_KEY) ?? 'null'))
+  } catch {
+    return DEFAULT_SHOW
+  }
+}
+
 /**
  * La agenda al estilo del calendario del móvil: el mes como cuadrícula de
  * colores con el detalle del día debajo, y las vistas de semana y día con la
@@ -47,6 +77,7 @@ export function AgendaPage() {
   const t = useT()
 
   const [view, setView] = useState<View>(loadView)
+  const [show, setShow] = useState<AgendaShow>(loadShow)
   const [anchor, setAnchor] = useState<ISODate>(today)
   const [direction, setDirection] = useState<1 | -1>(1)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -64,10 +95,11 @@ export function AgendaPage() {
 
   // Se recalcula al cambiar de mes o de datos, no al elegir otro día del mismo mes.
   const weeks = useMemo(() => monthWeeks(`${month}-01`, weekStartsOn), [month, weekStartsOn])
-  const agenda = useMemo(
+  const fullAgenda = useMemo(
     () => buildAgenda(state, weeks.flat(), today),
     [state.subjects, state.timetable, state.blocks, state.tasks, weeks, today],
   )
+  const agenda = useMemo(() => filterAgenda(fullAgenda, show), [fullAgenda, show])
 
   const changeView = (next: View) => {
     setView(next)
@@ -78,10 +110,30 @@ export function AgendaPage() {
     }
   }
 
+  const toggleShow = (key: keyof AgendaShow, value: boolean) => {
+    const next = { ...show, [key]: value }
+    setShow(next)
+    try {
+      localStorage.setItem(SHOW_KEY, JSON.stringify(next))
+    } catch {
+      /* no pasa nada: solo se pierde recordar lo que se muestra */
+    }
+  }
+
   const goMonth = useCallback((delta: 1 | -1) => {
     setDirection(delta)
     setAnchor((a) => shiftMonth(a, delta))
   }, [])
+
+  /** Un mes, una semana o un día hacia delante o atrás, según la vista. */
+  const goPeriod = useCallback(
+    (delta: 1 | -1) => {
+      if (view === 'month') return goMonth(delta)
+      setDirection(delta)
+      setAnchor((a) => addDays(a, delta * (view === 'week' ? 7 : 1)))
+    },
+    [view, goMonth],
+  )
 
   const goToday = () => {
     setDirection(today >= anchor ? 1 : -1)
@@ -154,17 +206,15 @@ export function AgendaPage() {
           {title}
         </button>
 
-        {/* En pantallas con ratón no se desliza: flechas para cambiar de mes. */}
-        {view === 'month' ? (
-          <span className="hidden items-center md:flex">
-            <button type="button" className={iconButton} onClick={() => goMonth(-1)} aria-label={t('agenda.prevMonth')}>
-              <ChevronLeft size={20} />
-            </button>
-            <button type="button" className={iconButton} onClick={() => goMonth(1)} aria-label={t('agenda.nextMonth')}>
-              <ChevronRight size={20} />
-            </button>
-          </span>
-        ) : null}
+        {/* En pantallas con ratón no se desliza: flechas para cambiar de periodo. */}
+        <span className="hidden items-center md:flex">
+          <button type="button" className={iconButton} onClick={() => goPeriod(-1)} aria-label={t('agenda.prevPeriod')}>
+            <ChevronLeft size={20} />
+          </button>
+          <button type="button" className={iconButton} onClick={() => goPeriod(1)} aria-label={t('agenda.nextPeriod')}>
+            <ChevronRight size={20} />
+          </button>
+        </span>
 
         <span className="ml-auto flex items-center gap-1">
           <button type="button" className={iconButton} onClick={openPalette} aria-label={t('agenda.search')}>
@@ -201,11 +251,14 @@ export function AgendaPage() {
         <TimeGridView
           anchor={anchor}
           mode={view}
+          direction={direction}
+          show={show}
           onAnchor={setAnchor}
           onOpenDay={(date) => {
             setAnchor(date)
             changeView('day')
           }}
+          onSwipe={goPeriod}
         />
       )}
 
@@ -253,6 +306,16 @@ export function AgendaPage() {
                 <span className="flex-1">{t(labelKey)}</span>
                 {view === value ? <Check size={18} /> : null}
               </button>
+            </li>
+          ))}
+        </ul>
+
+        <p className="eyebrow mb-1 mt-5 px-1">{t('agenda.show')}</p>
+        <ul>
+          {SHOW_OPTIONS.map(({ key, labelKey }) => (
+            <li key={key} className="flex items-center justify-between gap-3 rounded-2xl px-3 py-3">
+              <span className="text-md font-medium text-ink-2">{t(labelKey)}</span>
+              <Switch checked={show[key]} onChange={(value) => toggleShow(key, value)} label={t(labelKey)} />
             </li>
           ))}
         </ul>
