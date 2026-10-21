@@ -65,10 +65,20 @@ raíz de un dominio o en una subcarpeta, sin reglas de reescritura.
 
 ## Avisos: qué pueden y qué no
 
-Funcionan **sin servidor**: DayFlow calcula qué toca avisar y lo muestra mientras está abierto, en una
-pestaña o como app instalada en segundo plano. No hay avisos con la app completamente cerrada: eso
-exigiría un servidor de notificaciones push. En iPhone, los avisos solo existen con la app instalada en
-la pantalla de inicio.
+- **Con sesión de la nube iniciada**: los avisos son notificaciones push y llegan **aunque DayFlow esté
+  cerrado**. Cada dispositivo se registra en Supabase y sube su calendario de avisos de los próximos
+  7 días (`lib/push.ts`, `features/notifications/PushSync.tsx`); un trabajo de `pg_cron` mira cada minuto si
+  toca algo y llama a la función `dayflow-push`, que lo envía con Web Push (VAPID). Se renueva al abrir la
+  app o cambiar algo. El móvil lo refleja en el reloj emparejado si el reloj deja pasar esa app.
+- **Sin sesión** (o en un navegador sin push): DayFlow los muestra desde el propio navegador mientras está
+  abierto, en una pestaña o como app instalada en segundo plano.
+- En iPhone, los avisos solo existen con la app instalada en la pantalla de inicio.
+
+El servidor son tres tablas (`dayflow_push_subscriptions`, `dayflow_push_queue`, `dayflow_push_config`, todas
+con RLS; la última solo la lee la función), dos funciones SQL, el trabajo de cron y la función
+[`supabase/functions/dayflow-push`](supabase/functions/dayflow-push/index.ts). La clave privada VAPID se
+crea en el servidor la primera vez y nunca sale de él; la pública está en `lib/push.ts`. La función se
+despliega con `supabase functions deploy dayflow-push --no-verify-jwt` (hace su propia autenticación).
 
 ## Estructura
 

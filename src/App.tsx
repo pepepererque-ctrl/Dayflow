@@ -18,6 +18,7 @@ import { HabitDetailPage, HabitsPage } from '@/features/habits/HabitsPage'
 import { Onboarding } from '@/features/onboarding/Onboarding'
 import { CommandPalette } from '@/features/palette/CommandPalette'
 import { NotificationScheduler } from '@/features/notifications/NotificationScheduler'
+import { PushSync } from '@/features/notifications/PushSync'
 import { AgendaPage } from '@/features/agenda/AgendaPage'
 import { SettingsPage } from '@/features/settings/SettingsPage'
 import { SubjectDetailPage, SubjectsPage } from '@/features/subjects/SubjectsPage'
@@ -117,6 +118,7 @@ function Routes() {
       </AppShell>
       <CommandPalette />
       <NotificationScheduler />
+      <PushSync />
     </>
   )
 }

@@ -14,7 +14,9 @@ import {
   useNotifyPrefs,
   type NotifyPrefs,
 } from '@/lib/notify'
+import { disablePush, enablePush, pushSupported, sendPushTest, usePushActive } from '@/lib/push'
 import { useInstall } from '@/lib/pwa'
+import { useSync } from '@/store/SyncProvider'
 import { useT } from '@/i18n/I18nProvider'
 import { Row } from './Row'
 
@@ -26,6 +28,8 @@ export function AppCard() {
   const { toast } = useToast()
   const install = useInstall()
   const prefs = useNotifyPrefs()
+  const { userId } = useSync()
+  const pushActive = usePushActive()
   const [permission, setPermission] = useState(notificationPermission)
 
   // El permiso se cambia desde los ajustes del navegador: se relee al volver a la pestaña.
@@ -40,6 +44,7 @@ export function AppCard() {
   const toggle = async (on: boolean) => {
     if (!on) {
       savePrefs({ ...prefs, enabled: false })
+      await disablePush()
       toast(t('notify.disabledToast'), { tone: 'info' })
       return
     }
@@ -52,7 +57,13 @@ export function AppCard() {
     setPermission(result)
     if (result === 'granted') {
       savePrefs({ ...prefs, enabled: true })
-      toast(t('notify.enabledToast'))
+      if (userId && pushSupported()) {
+        // Con sesión, el servidor se encarga de enviarlos aunque la app esté cerrada.
+        const registered = await enablePush(userId)
+        toast(t(registered ? 'notify.enabledPushToast' : 'notify.pushFailed'), { tone: registered ? 'success' : 'info' })
+      } else {
+        toast(t('notify.enabledToast'))
+      }
     } else if (result === 'denied') {
       toast(t('notify.denied'), { tone: 'error' })
     }
@@ -61,6 +72,12 @@ export function AppCard() {
   const setKind = (kind: Kind, value: boolean) => savePrefs({ ...prefs, [kind]: value } as NotifyPrefs)
 
   const sendTest = async () => {
+    if (pushActive) {
+      // Por el mismo camino que los avisos reales: servidor, push y service worker.
+      const sent = await sendPushTest()
+      toast(t(sent ? 'notify.testPushSent' : 'notify.testFailed'), { tone: sent ? 'success' : 'error' })
+      return
+    }
     const ok = await showNotice({
       title: t('notify.testTitle'),
       body: t('notify.testBody'),
@@ -152,7 +169,10 @@ export function AppCard() {
           </>
         ) : null}
 
-        <p className="px-5 pb-4 pt-1 text-xs leading-relaxed text-ink-3">{t('notify.limits')}</p>
+        <p className="px-5 pb-4 pt-1 text-xs leading-relaxed text-ink-3">
+          {pushActive ? t('notify.limitsPush') : t('notify.limits')}
+          {!userId && !pushActive && pushSupported() ? ` ${t('notify.signInHint')}` : ''}
+        </p>
       </div>
     </Card>
   )

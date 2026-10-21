@@ -1,17 +1,17 @@
 import { useSyncExternalStore } from 'react'
 import { es } from '@/i18n/es'
 import type { AppState, ISODate } from '@/types'
-import { formatClock, fromISO, minutesFromClock, toISO } from './date'
+import { addDays, formatClock, fromISO, minutesFromClock, toISO } from './date'
 import { listExams } from './exams'
 import { classesOn } from './timetable'
 
 /**
  * Avisos de clases, estudio, entregas y exámenes.
  *
- * Funcionan sin servidor: DayFlow calcula qué toca avisar y lo muestra mientras
- * está abierto (en una pestaña o como app instalada en segundo plano). No hay
- * avisos con la app cerrada del todo: eso exige un servidor de notificaciones
- * push, que esta app no tiene.
+ * DayFlow calcula qué toca avisar a partir de tu estado. Con la sesión de la nube
+ * iniciada, `lib/push.ts` sube ese calendario al servidor y los avisos llegan como
+ * notificaciones push aunque la app esté cerrada. Sin sesión (o sin push en el
+ * navegador) se muestran desde aquí mientras DayFlow esté abierto.
  */
 
 export interface NotifyPrefs {
@@ -233,6 +233,34 @@ export function buildNotices(
     }
   }
 
+  return out.sort((a, b) => a.at - b.at)
+}
+
+/** Cuántos días por delante se envían al servidor. Se renueva cada vez que se abre la app o cambia algo. */
+export const SCHEDULE_DAYS = 7
+
+/**
+ * Los avisos de los próximos días, para que el servidor los envíe aunque la app
+ * esté cerrada. Es `buildNotices` día a día; el de hoy usa la hora real y los demás
+ * el mediodía, para que un cambio de hora no los mueva de día.
+ */
+export function buildSchedule(
+  state: Pick<AppState, 'subjects' | 'timetable' | 'blocks' | 'tasks'>,
+  nowMs: number,
+  prefs: NotifyPrefs,
+): Notice[] {
+  const today = toISO(new Date(nowMs))
+  const seen = new Set<string>()
+  const out: Notice[] = []
+  for (let i = 0; i < SCHEDULE_DAYS; i++) {
+    const noon = fromISO(addDays(today, i))
+    noon.setHours(12, 0, 0, 0)
+    for (const n of buildNotices(state, i === 0 ? nowMs : noon.getTime(), prefs)) {
+      if (n.eventAt <= nowMs || seen.has(n.key)) continue
+      seen.add(n.key)
+      out.push(n)
+    }
+  }
   return out.sort((a, b) => a.at - b.at)
 }
 

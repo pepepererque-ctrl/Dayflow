@@ -11,6 +11,7 @@ import {
 import type { Session } from '@supabase/supabase-js'
 import type { AppState } from '@/types'
 import { SYNC_TABLE, deviceId, supabase, syncConfigured } from '@/lib/supabase'
+import { disablePush } from '@/lib/push'
 import { sanitizeState } from '@/lib/storage'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/Confirm'
@@ -302,6 +303,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const client = supabase()
     if (!client) return
+    // Con la sesión aún abierta, para que el servidor deje de avisar a este dispositivo de esta cuenta.
+    await disablePush()
     await client.auth.signOut()
     toast(t('auth.signedOut'), { tone: 'info' })
   }, [t, toast])

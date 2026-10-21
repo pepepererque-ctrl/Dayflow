@@ -8,6 +8,7 @@ import {
   readFired,
   useNotifyPrefs,
 } from '@/lib/notify'
+import { usePushActive } from '@/lib/push'
 import { useApp } from '@/store/AppStore'
 
 /** Cada cuánto se mira si toca avisar. Medio minuto basta para avisos que se dan al minuto. */
@@ -15,17 +16,19 @@ const TICK_MS = 30_000
 
 /**
  * Comprueba periódicamente qué avisos tocan y los muestra. No pinta nada.
- * Solo trabaja con los avisos activados y el permiso concedido.
+ * Solo trabaja con los avisos activados y el permiso concedido, y se aparta cuando
+ * los avisos de este dispositivo ya los envía el servidor (si no, saldrían dos veces).
  */
 export function NotificationScheduler() {
   const { state } = useApp()
   const prefs = useNotifyPrefs()
+  const serverSends = usePushActive()
   // El temporizador lee siempre el estado más reciente sin reiniciarse a cada cambio.
   const stateRef = useRef(state)
   stateRef.current = state
 
   useEffect(() => {
-    if (!prefs.enabled || notificationPermission() !== 'granted') return
+    if (!prefs.enabled || serverSends || notificationPermission() !== 'granted') return
 
     const tick = () => {
       const now = Date.now()
@@ -50,7 +53,7 @@ export function NotificationScheduler() {
       window.clearInterval(id)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [prefs])
+  }, [prefs, serverSends])
 
   return null
 }

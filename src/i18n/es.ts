@@ -999,6 +999,13 @@ export const es = {
   'notify.testBody': 'Así te llegarán los avisos.',
   'notify.limits':
     'Los avisos salen mientras DayFlow esté abierto, en una pestaña o como app instalada en segundo plano. Si el sistema cierra la app, llegarán al volver a abrirla, y solo los que aún no hayan pasado.',
+  'notify.enabledPushToast': 'Avisos activados, también con la app cerrada',
+  'notify.pushFailed':
+    'Avisos activados mientras DayFlow esté abierto. No se pudo registrar este dispositivo para recibirlos con la app cerrada.',
+  'notify.testPushSent': 'Aviso enviado desde el servidor: debería llegar en unos segundos',
+  'notify.limitsPush':
+    'Los avisos te llegan desde el servidor aunque DayFlow esté cerrado. Si tu reloj está emparejado con el móvil y deja pasar las notificaciones de esta app, también salen en la muñeca. Se programan los próximos 7 días y se renuevan cada vez que abres DayFlow o cambias algo.',
+  'notify.signInHint': 'Inicia sesión en la nube (Ajustes) para recibirlos también con la app cerrada.',
   'notify.classTitle': (v: { subject: string }) => v.subject,
   // Solo la hora, no «en N min»: un aviso que llega tarde (app cerrada un rato) mentiría.
   'notify.classBody': (v: { time: string; room: string }) =>

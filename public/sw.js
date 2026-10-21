@@ -97,6 +97,28 @@ self.addEventListener('fetch', (event) => {
 
 /* --------------------------------- avisos --------------------------------- */
 
+// Aviso enviado por el servidor (funciona con la app cerrada). Siempre debe mostrar algo.
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    data = { body: event.data ? event.data.text() : '' }
+  }
+  const icon = here('icon-192.png')
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'DayFlow', {
+      body: data.body || '',
+      // Con la misma etiqueta, un aviso repetido sustituye al anterior en vez de apilarse.
+      tag: data.tag,
+      icon,
+      badge: icon,
+      lang: 'es',
+      data: { url: data.url || './#/today' },
+    }),
+  )
+})
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const target = new URL((event.notification.data && event.notification.data.url) || './#/today', scopeUrl)
