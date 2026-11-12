@@ -113,10 +113,18 @@ export interface FocusSession {
 export interface EvalGroup {
   id: string
   name: string
-  /** Peso del bloque en % sobre la nota final. Si los pesos no suman 100 se calcula en proporción. */
+  /**
+   * Peso en %. Un bloque pesa sobre la nota final; un apartado (ver `parentId`) pesa dentro de su
+   * bloque. Si los pesos no suman 100 se calcula en proporción.
+   */
   weight: number
   /** Nota de recuperación del bloque, aparte de los exámenes: sustituye a la del bloque si es mayor. */
   recovery: number | null
+  /**
+   * null = es un bloque (un trimestre). Si no, es un apartado de ese bloque («Exámenes», «Trabajos»):
+   * solo hay dos niveles. Un bloque con apartados reparte su peso entre ellos y las partes van en los apartados.
+   */
+  parentId: string | null
 }
 
 export interface EvalItem {

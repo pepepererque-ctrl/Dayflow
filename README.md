@@ -34,8 +34,9 @@ raíz de un dominio o en una subcarpeta, sin reglas de reescritura.
 - **Evaluación y notas**: tú defines las partes de cada asignatura (peso, nota, mínimo, fecha). Calcula
   la nota actual, la máxima posible y **qué nota necesitas** para llegar a un objetivo, respetando los
   mínimos. Nota media del expediente ponderada por créditos. Cada asignatura puede dividirse en
-  **bloques** con su propio peso (trimestres 25/35/35, o «Exámenes» 80 % y «Trabajos» 20 %): las partes
-  pesan dentro de su bloque y el bloque sobre la nota final. Cada bloque puede tener una **recuperación**
+  **bloques** con su propio peso (trimestres 25/35/35) y, dentro de cada bloque, **apartados** («Exámenes» 80 %,
+  «Trabajos» 20 %): las partes pesan dentro de su apartado, el apartado dentro de su bloque y el bloque sobre
+  la nota final. Un bloque sin apartados guarda sus partes directamente (también sirve «Exámenes» y «Trabajos» como bloques). Cada bloque puede tener una **recuperación**
   aparte de los exámenes (sustituye a la nota del bloque si la mejora). Sin bloques, todo funciona como siempre.
 - **Exámenes**: cuenta atrás, siguiente examen y pasados. **Plan de estudio automático**: reparte
   sesiones entre hoy y la víspera en los huecos libres de la agenda, esquivando clases.

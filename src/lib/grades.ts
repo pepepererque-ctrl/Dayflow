@@ -51,55 +51,130 @@ const virtualItem = (id: string, name: string, weight: number, grade: number | n
   room: '',
 })
 
+/** Un sitio donde van partes: un apartado, o el propio bloque si no tiene apartados. */
+interface Leaf {
+  group: EvalGroup
+  /** Peso de este sitio sobre la nota final (en las mismas unidades que `weight`). */
+  share: number
+  members: EvalItem[]
+  /** Suma de los pesos de las partes de dentro, para repartir `share` entre ellas. */
+  sum: number
+}
+
+interface Block {
+  root: EvalGroup
+  sections: EvalGroup[]
+  leaves: Leaf[]
+}
+
+/**
+ * Los bloques con su peso repartido: un bloque sin apartados guarda sus partes directamente;
+ * uno con apartados reparte su peso entre ellos en proporción a lo que pese cada uno.
+ */
+function layout(subject: Evaluable): Block[] {
+  const groups = subject.groups ?? []
+  return groups
+    .filter((g) => !g.parentId)
+    .map((root) => {
+      const sections = groups.filter((g) => g.parentId === root.id)
+      const sectionTotal = sections.reduce((s, g) => s + g.weight, 0)
+      const leaves = (sections.length ? sections : [root]).map((group) => {
+        const members = subject.evaluation.filter((i) => i.groupId === group.id)
+        return {
+          group,
+          share: sections.length && sectionTotal > 0 ? (root.weight * group.weight) / sectionTotal : root.weight,
+          members,
+          sum: members.reduce((s, i) => s + i.weight, 0),
+        }
+      })
+      return { root, sections, leaves }
+    })
+}
+
+/** Dónde se pueden poner partes: apartados, y bloques que no tienen apartados. Con el bloque al que pertenecen. */
+export function leafGroups(subject: Evaluable): Array<{ group: EvalGroup; parent: EvalGroup | null }> {
+  return layout(subject).flatMap((b): Array<{ group: EvalGroup; parent: EvalGroup | null }> =>
+    b.sections.length ? b.sections.map((group) => ({ group, parent: b.root })) : [{ group: b.root, parent: null }],
+  )
+}
+
 /**
  * Las partes de la asignatura con el peso que de verdad tienen sobre la nota final.
  *
- * Sin bloques es la propia lista. Con bloques, el peso de cada parte se reparte dentro
- * de su bloque (que pesa lo que pese): un examen del 40 % de un trimestre del 25 % vale
- * un 10 %. Un bloque sin partes cuenta como pendiente, y uno con recuperación y todo
- * evaluado se queda en una sola nota (la mayor entre su media y la recuperación). Las
- * partes sin bloque pesan por sí mismas sobre la nota final.
+ * Sin bloques es la propia lista. Con bloques, el peso de cada parte se reparte dentro de su
+ * sitio (apartado o bloque) y ese sitio pesa lo que le toque: un examen del 40 % de un apartado
+ * del 80 % de un trimestre del 25 % vale un 8 %. Un sitio sin partes cuenta como pendiente, y un
+ * bloque con recuperación y todo evaluado se queda en una sola nota (la mayor entre su media y la
+ * recuperación). Las partes sin sitio pesan por sí mismas sobre la nota final.
  */
 export function effectiveItems(subject: Evaluable): EvalItem[] {
-  const groups = subject.groups ?? []
-  if (!groups.length) return subject.evaluation
+  if (!(subject.groups ?? []).length) return subject.evaluation
 
-  const known = new Set(groups.map((g) => g.id))
+  const blocks = layout(subject)
+  const placed = new Set(blocks.flatMap((b) => b.leaves.map((l) => l.group.id)))
   const out: EvalItem[] = []
-  for (const group of groups) {
-    const members = subject.evaluation.filter((i) => i.groupId === group.id)
-    const sum = members.reduce((s, i) => s + i.weight, 0)
-    if (!members.length || sum <= 0) {
-      out.push(virtualItem(`${group.id}:empty`, group.name, group.weight, null))
-      continue
+  for (const block of blocks) {
+    const entries: EvalItem[] = []
+    let allGraded = true
+    for (const leaf of block.leaves) {
+      if (!leaf.members.length || leaf.sum <= 0) {
+        const label = leaf.group === block.root ? block.root.name : `${block.root.name} · ${leaf.group.name}`
+        entries.push(virtualItem(`${leaf.group.id}:empty`, label, leaf.share, null))
+        allGraded = false
+        continue
+      }
+      for (const item of leaf.members) {
+        entries.push({ ...item, weight: (leaf.share * item.weight) / leaf.sum })
+        if (item.grade === null) allGraded = false
+      }
     }
-    if (group.recovery !== null && members.every((i) => i.grade !== null)) {
-      const average = members.reduce((s, i) => s + (i.weight / sum) * (i.grade as number), 0)
-      out.push(virtualItem(`${group.id}:group`, group.name, group.weight, Math.max(average, group.recovery)))
-      continue
+    if (block.root.recovery !== null && allGraded) {
+      const total = entries.reduce((s, i) => s + i.weight, 0)
+      const average = total > 0 ? entries.reduce((s, i) => s + i.weight * (i.grade as number), 0) / total : 0
+      out.push(virtualItem(`${block.root.id}:group`, block.root.name, block.root.weight, Math.max(average, block.root.recovery)))
+    } else {
+      out.push(...entries)
     }
-    for (const item of members) out.push({ ...item, weight: (group.weight * item.weight) / sum })
   }
   for (const item of subject.evaluation) {
-    if (!item.groupId || !known.has(item.groupId)) out.push(item)
+    if (!item.groupId || !placed.has(item.groupId)) out.push(item)
   }
   return out
 }
 
 /** Cuánto vale una parte sobre la nota final (en las mismas unidades que `weight`). */
 export function itemWeight(subject: Evaluable, item: EvalItem): number {
-  const group = item.groupId ? (subject.groups ?? []).find((g) => g.id === item.groupId) : undefined
-  if (!group) return item.weight
-  const sum = subject.evaluation.filter((i) => i.groupId === group.id).reduce((s, i) => s + i.weight, 0)
-  return sum > 0 ? (group.weight * item.weight) / sum : item.weight
+  for (const block of layout(subject)) {
+    const leaf = block.leaves.find((l) => l.group.id === item.groupId)
+    if (leaf) return leaf.sum > 0 ? (leaf.share * item.weight) / leaf.sum : item.weight
+  }
+  return item.weight
+}
+
+/** Media de lo evaluado de unas partes, cada una con su peso; null si ninguna tiene nota. */
+function weightedMean(items: Array<{ grade: number | null; weight: number }>): number | null {
+  const graded = items.filter((i) => i.grade !== null)
+  const total = graded.reduce((s, i) => s + i.weight, 0)
+  return graded.length && total > 0 ? graded.reduce((s, i) => s + i.weight * (i.grade as number), 0) / total : null
+}
+
+export interface SectionGrade {
+  group: EvalGroup
+  items: EvalItem[]
+  /** Media de lo ya evaluado dentro del apartado, o null si aún no hay ninguna nota. */
+  average: number | null
+  complete: boolean
 }
 
 export interface GroupGrade {
   group: EvalGroup
+  /** Los apartados del bloque, en su orden. Vacío si el bloque guarda sus partes directamente. */
+  sections: SectionGrade[]
+  /** Todas las partes del bloque, de todos sus apartados. */
   items: EvalItem[]
   /** Media de lo ya evaluado dentro del bloque, o null si aún no hay ninguna nota. */
   average: number | null
-  /** Todas las partes del bloque (y al menos una) tienen nota. */
+  /** Todos los sitios del bloque tienen partes y todas tienen nota. */
   complete: boolean
   /** Nota del bloque cuando está completo, con la recuperación si mejora la media. */
   score: number | null
@@ -109,22 +184,35 @@ export interface GroupGrade {
 
 /** Resumen de cada bloque, en su orden. Vacío si la asignatura no usa bloques. */
 export function groupGrades(subject: Evaluable): GroupGrade[] {
-  return (subject.groups ?? []).map((group) => {
-    const items = subject.evaluation.filter((i) => i.groupId === group.id)
-    const graded = items.filter((i) => i.grade !== null)
-    const gradedWeight = graded.reduce((s, i) => s + i.weight, 0)
-    const average =
-      graded.length && gradedWeight > 0
-        ? graded.reduce((s, i) => s + i.weight * (i.grade as number), 0) / gradedWeight
-        : null
-    const complete = items.length > 0 && graded.length === items.length
-    const recovered = complete && average !== null && group.recovery !== null && group.recovery > average
+  return layout(subject).map((block) => {
+    const weighted = block.leaves.flatMap((leaf) =>
+      leaf.members.map((item) => ({
+        item,
+        grade: item.grade,
+        weight: leaf.sum > 0 ? (leaf.share * item.weight) / leaf.sum : 0,
+      })),
+    )
+    const items = weighted.map((w) => w.item)
+    const average = weightedMean(weighted)
+    const complete =
+      block.leaves.every((l) => l.members.length > 0 && l.sum > 0) && items.every((i) => i.grade !== null)
+    const recovery = block.root.recovery
+    const recovered = complete && average !== null && recovery !== null && recovery > average
+    const sections = block.sections.length
+      ? block.leaves.map((leaf) => ({
+          group: leaf.group,
+          items: leaf.members,
+          average: weightedMean(leaf.members),
+          complete: leaf.members.length > 0 && leaf.members.every((i) => i.grade !== null),
+        }))
+      : []
     return {
-      group,
+      group: block.root,
+      sections,
       items,
       average,
       complete,
-      score: complete && average !== null ? (recovered ? (group.recovery as number) : average) : null,
+      score: complete && average !== null ? (recovered ? (recovery as number) : average) : null,
       recovered,
     }
   })

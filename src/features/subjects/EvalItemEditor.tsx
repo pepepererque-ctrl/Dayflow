@@ -6,6 +6,7 @@ import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/Confirm'
 import { useToast } from '@/components/ui/Toast'
 import { todayISO } from '@/lib/date'
+import { leafGroups } from '@/lib/grades'
 import { uid } from '@/lib/id'
 import { useApp } from '@/store/AppStore'
 import { useT } from '@/i18n/I18nProvider'
@@ -81,7 +82,14 @@ export function EvalItemEditor({
   const [draft, setDraft] = useState<Draft>(() => toDraft(item, defaultGroupId))
   const [errors, setErrors] = useState<Errors>({})
   const groups = subject.groups
-  const group = groups.find((g) => g.id === draft.groupId)
+  // Sitios donde cabe una parte: apartados, y bloques que no tienen apartados.
+  const places = leafGroups(subject)
+  const place = places.find((p) => p.group.id === draft.groupId)
+  const placeName = place
+    ? place.parent
+      ? t('evalEditor.groupOf', { block: place.parent.name, name: place.group.name })
+      : place.group.name
+    : ''
 
   useEffect(() => {
     if (!open) return
@@ -118,7 +126,7 @@ export function EvalItemEditor({
     const next: EvalItem = {
       id: item?.id ?? uid('ev'),
       name: draft.name.trim(),
-      groupId: groups.some((g) => g.id === draft.groupId) ? draft.groupId : null,
+      groupId: places.some((p) => p.group.id === draft.groupId) ? draft.groupId : null,
       weight: round2(weight),
       grade: draft.grade.trim() ? round2(parseNumber(draft.grade)) : null,
       minGrade: draft.minGrade.trim() ? round2(parseNumber(draft.minGrade)) : null,
@@ -209,21 +217,40 @@ export function EvalItemEditor({
           <Field label={t('evalEditor.group')} htmlFor="eval-group" hint={t('evalEditor.groupHint')}>
             <Select id="eval-group" value={draft.groupId} onChange={(e) => set('groupId', e.target.value)}>
               <option value="">{t('evalEditor.noGroup')}</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
+              {groups
+                .filter((g) => !g.parentId)
+                .map((block) => {
+                  const sections = groups.filter((g) => g.parentId === block.id)
+                  return sections.length ? (
+                    <optgroup key={block.id} label={block.name}>
+                      {sections.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : (
+                    <option key={block.id} value={block.id}>
+                      {block.name}
+                    </option>
+                  )
+                })}
             </Select>
           </Field>
         ) : null}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
-            label={group ? t('evalEditor.weightInGroup') : t('evalEditor.weight')}
+            label={
+              place ? t(place.parent ? 'evalEditor.weightInSection' : 'evalEditor.weightInGroup') : t('evalEditor.weight')
+            }
             htmlFor="eval-weight"
             error={errors.weight}
-            hint={group ? t('evalEditor.weightInGroupHint', { name: group.name }) : t('evalEditor.weightHint')}
+            hint={
+              place
+                ? t(place.parent ? 'evalEditor.weightInSectionHint' : 'evalEditor.weightInGroupHint', { name: placeName })
+                : t('evalEditor.weightHint')
+            }
             required
           >
             <TextInput

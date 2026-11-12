@@ -16,7 +16,15 @@ import { useToast } from '@/components/ui/Toast'
 import { cn } from '@/lib/cn'
 import { MAX_EVAL_ITEMS } from '@/lib/constants'
 import { diffDays, formatClock, formatShortDate } from '@/lib/date'
-import { PASS_GRADE, computeGrades, formatGrade, groupGrades, requiredFor, type GroupGrade } from '@/lib/grades'
+import {
+  PASS_GRADE,
+  computeGrades,
+  formatGrade,
+  groupGrades,
+  leafGroups,
+  requiredFor,
+  type GroupGrade,
+} from '@/lib/grades'
 import { useApp } from '@/store/AppStore'
 import { useT } from '@/i18n/I18nProvider'
 import type { EvalItem, Subject } from '@/types'
@@ -117,7 +125,9 @@ export function EvaluationCard({ subject }: { subject: Subject }) {
   const byGroup = useMemo(() => groupGrades(subject), [subject])
   const atLimit = subject.evaluation.length >= MAX_EVAL_ITEMS
   const grouped = subject.groups.length > 0
-  const ungrouped = subject.evaluation.filter((e) => !e.groupId)
+  // Partes que no están en ningún sitio (sin bloque, o de un bloque que ya no existe).
+  const placedIds = useMemo(() => new Set(leafGroups(subject).map((p) => p.group.id)), [subject])
+  const ungrouped = subject.evaluation.filter((e) => !e.groupId || !placedIds.has(e.groupId))
 
   const openEditor = (item: EvalItem | null, groupId: string | null = null) => {
     if (!item && atLimit) {
@@ -230,16 +240,52 @@ export function EvaluationCard({ subject }: { subject: Subject }) {
               {gg.recovered ? ` · ${t('groups.recovered')}` : ''}
             </p>
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            aria-label={t('groups.addToGroup', { name: group.name })}
-            onClick={() => openEditor(null, group.id)}
-          >
-            <Plus size={14} />
-          </Button>
+          {gg.sections.length === 0 ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={t('groups.addToGroup', { name: group.name })}
+              onClick={() => openEditor(null, group.id)}
+            >
+              <Plus size={14} />
+            </Button>
+          ) : null}
         </div>
-        {gg.items.length ? (
+        {gg.sections.length ? (
+          // Un bloque con apartados («Exámenes», «Trabajos»…): cada uno con su peso, su media y sus partes.
+          gg.sections.map((section) => (
+            <div key={section.group.id} className="mt-2 border-l-2 border-line pl-2" role="group" aria-label={section.group.name}>
+              <div className="flex items-center gap-2 px-2">
+                <div className="min-w-0 flex-1">
+                  <h4 className="truncate text-xs font-semibold uppercase tracking-wide text-ink-2">
+                    {section.group.name}
+                  </h4>
+                  <p className="tnum mt-0.5 text-xs text-ink-3">
+                    {t('groups.sectionOfBlock', { n: formatGrade(section.group.weight) })} ·{' '}
+                    {section.average !== null
+                      ? t('groups.average', { n: formatGrade(section.average) })
+                      : t('groups.noGrades')}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label={t('groups.addToGroup', { name: `${group.name} · ${section.group.name}` })}
+                  onClick={() => openEditor(null, section.group.id)}
+                >
+                  <Plus size={14} />
+                </Button>
+              </div>
+              {section.items.length ? (
+                <ul className="mt-1">
+                  {section.items.map((item) => renderItem(item, t('groups.inSection', { n: formatGrade(item.weight) })))}
+                </ul>
+              ) : (
+                <p className="px-2 pb-1 pt-1 text-xs text-ink-3">{t('groups.emptySection')}</p>
+              )}
+            </div>
+          ))
+        ) : gg.items.length ? (
           <ul className="mt-1">
             {gg.items.map((item) => renderItem(item, t('groups.inGroup', { n: formatGrade(item.weight) })))}
           </ul>

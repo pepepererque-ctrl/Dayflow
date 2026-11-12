@@ -207,6 +207,7 @@ function parseEvalGroup(raw: unknown): EvalGroup | null {
     name: name.slice(0, 60),
     weight: round2(weight),
     recovery: raw.recovery == null || raw.recovery === '' ? null : round2(num(raw.recovery, 0, 0, 10)),
+    parentId: typeof raw.parentId === 'string' && raw.parentId ? raw.parentId : null,
   }
 }
 
@@ -237,11 +238,22 @@ function parseSubject(raw: unknown): Subject | null {
   if (!isRecord(raw)) return null
   const name = str(raw.name).trim()
   if (!name) return null
-  const groups = arr(raw.groups)
+  const parsedGroups = arr(raw.groups)
     .map(parseEvalGroup)
     .filter((g): g is EvalGroup => g !== null)
+  // Solo hay dos niveles: un apartado cuelga de un bloque, no de otro apartado ni de sí mismo.
+  const blockIds = new Set(parsedGroups.filter((g) => !g.parentId).map((g) => g.id))
+  const groups = parsedGroups
+    .filter((g) => !g.parentId || (g.parentId !== g.id && blockIds.has(g.parentId)))
+    // La recuperación es del bloque entero, no de un apartado.
+    .map((g) => (g.parentId ? { ...g, recovery: null } : g))
     .slice(0, MAX_EVAL_GROUPS)
   const groupIds = new Set(groups.map((g) => g.id))
+  // Las partes de un bloque que tiene apartados van al primero de ellos: así no quedan fuera de las cuentas.
+  const firstSection = new Map<string, string>()
+  for (const g of groups) if (g.parentId && !firstSection.has(g.parentId)) firstSection.set(g.parentId, g.id)
+  const placeItem = (id: string | null): string | null =>
+    id && groupIds.has(id) ? (firstSection.get(id) ?? id) : null
   return {
     id: str(raw.id) || uid('sub'),
     name: name.slice(0, 120),
@@ -258,7 +270,7 @@ function parseSubject(raw: unknown): Subject | null {
       .map(parseEvalItem)
       .filter((e): e is EvalItem => e !== null)
       // Una parte cuyo bloque ya no existe queda sin bloque, no huérfana.
-      .map((e) => ({ ...e, groupId: e.groupId && groupIds.has(e.groupId) ? e.groupId : null }))
+      .map((e) => ({ ...e, groupId: placeItem(e.groupId) }))
       .slice(0, MAX_EVAL_ITEMS),
     groups,
     createdAt: isoStamp(raw.createdAt, new Date().toISOString()),
