@@ -7,6 +7,7 @@ import type {
   ClassSlot,
   ColorKey,
   EnergyPattern,
+  EvalGroup,
   EvalItem,
   FocusSession,
   Goal,
@@ -32,6 +33,7 @@ import {
   MAX_CLASS_SLOTS,
   CATEGORY_KEYS,
   COLOR_KEYS,
+  MAX_EVAL_GROUPS,
   MAX_EVAL_ITEMS,
   SCHEMA_VERSION,
   STORAGE_KEY,
@@ -194,6 +196,20 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 
 const EXAM_NAME = /exam|parcial|final|test|control|prueba/i
 
+function parseEvalGroup(raw: unknown): EvalGroup | null {
+  if (!isRecord(raw)) return null
+  const name = str(raw.name).trim()
+  const weight = num(raw.weight, 0, 0, 100)
+  // Un bloque sin nombre o sin peso no cuenta para nada.
+  if (!name || weight <= 0) return null
+  return {
+    id: str(raw.id) || uid('grp'),
+    name: name.slice(0, 60),
+    weight: round2(weight),
+    recovery: raw.recovery == null || raw.recovery === '' ? null : round2(num(raw.recovery, 0, 0, 10)),
+  }
+}
+
 function parseEvalItem(raw: unknown): EvalItem | null {
   if (!isRecord(raw)) return null
   const name = str(raw.name).trim()
@@ -205,6 +221,8 @@ function parseEvalItem(raw: unknown): EvalItem | null {
     id: str(raw.id) || uid('ev'),
     name: name.slice(0, 80),
     weight: round2(weight),
+    // Se valida contra los bloques de la asignatura en `parseSubject`.
+    groupId: typeof raw.groupId === 'string' && raw.groupId ? raw.groupId : null,
     grade: raw.grade == null || raw.grade === '' ? null : round2(num(raw.grade, 0, 0, 10)),
     minGrade: raw.minGrade == null || raw.minGrade === '' ? null : round2(num(raw.minGrade, 0, 0, 10)),
     date: nullableDate(raw.date),
@@ -219,6 +237,11 @@ function parseSubject(raw: unknown): Subject | null {
   if (!isRecord(raw)) return null
   const name = str(raw.name).trim()
   if (!name) return null
+  const groups = arr(raw.groups)
+    .map(parseEvalGroup)
+    .filter((g): g is EvalGroup => g !== null)
+    .slice(0, MAX_EVAL_GROUPS)
+  const groupIds = new Set(groups.map((g) => g.id))
   return {
     id: str(raw.id) || uid('sub'),
     name: name.slice(0, 120),
@@ -234,7 +257,10 @@ function parseSubject(raw: unknown): Subject | null {
     evaluation: arr(raw.evaluation)
       .map(parseEvalItem)
       .filter((e): e is EvalItem => e !== null)
+      // Una parte cuyo bloque ya no existe queda sin bloque, no huérfana.
+      .map((e) => ({ ...e, groupId: e.groupId && groupIds.has(e.groupId) ? e.groupId : null }))
       .slice(0, MAX_EVAL_ITEMS),
+    groups,
     createdAt: isoStamp(raw.createdAt, new Date().toISOString()),
   }
 }

@@ -25,7 +25,8 @@ import type {
 } from '@/types'
 import { todayISO } from '@/lib/date'
 import { uid } from '@/lib/id'
-import { clearState, loadState, saveState } from '@/lib/storage'
+import { deepEqual, isPristine, mergeStates, type SyncState } from '@/lib/merge'
+import { clearState, loadState, sanitizeState, saveState } from '@/lib/storage'
 import { createEmptyState, createSeedState, type SeedOptions } from '@/lib/seed'
 
 /** How a finished onboarding run treats whatever data already exists. */
@@ -35,6 +36,8 @@ export type OnboardingMode = 'demo' | 'empty' | 'keep'
 
 export type Action =
   | { type: 'replace'; state: AppState }
+  /** Llega la copia de la nube: se combina con lo de este dispositivo sin pisar lo que se esté escribiendo. */
+  | { type: 'mergeRemote'; base: SyncState | null; remote: AppState }
   | { type: 'finishOnboarding'; options: SeedOptions; mode: OnboardingMode }
   | { type: 'restartOnboarding' }
   | { type: 'patchProfile'; patch: Partial<Profile> }
@@ -82,6 +85,18 @@ function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'replace':
       return action.state
+
+    case 'mergeRemote': {
+      // Un dispositivo sin estrenar (o sin nada puesto) adopta la nube tal cual.
+      if (!state.onboardingComplete || isPristine(state)) {
+        return { ...action.remote, settings: state.settings, onboardingComplete: true }
+      }
+      const merged = sanitizeState(mergeStates(action.base, state, action.remote))
+      if (!merged) return state
+      const next: AppState = { ...merged, onboardingComplete: true }
+      // Sin cambios reales se devuelve el mismo objeto, para no repintar ni volver a guardar.
+      return deepEqual(next, state) ? state : next
+    }
 
     case 'finishOnboarding': {
       const profile: Profile = {
@@ -376,7 +391,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveState(state)
   }, [state])
-
   const replaceState = useCallback((next: AppState) => dispatch({ type: 'replace', state: next }), [])
 
   const resetDemoData = useCallback(() => {

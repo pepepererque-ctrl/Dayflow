@@ -119,7 +119,7 @@ export function SubjectEditor({
     } else {
       dispatch({
         type: 'addSubject',
-        subject: { id: uid('sub'), createdAt: new Date().toISOString(), evaluation: [], ...payload },
+        subject: { id: uid('sub'), createdAt: new Date().toISOString(), evaluation: [], groups: [], ...payload },
       })
       toast(t('subjectEditor.created'))
     }

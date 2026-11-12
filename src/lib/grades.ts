@@ -1,4 +1,7 @@
-import type { EvalItem, Subject } from '@/types'
+import type { EvalGroup, EvalItem, Subject } from '@/types'
+
+/** Lo que necesita el cálculo de una asignatura. `groups` puede faltar en datos antiguos. */
+type Evaluable = Pick<Subject, 'evaluation'> & Partial<Pick<Subject, 'groups'>>
 
 /** Nota mínima para aprobar en la escala 0-10. */
 export const PASS_GRADE = 5
@@ -35,8 +38,100 @@ export interface SubjectGrades {
   belowMin: EvalItem[]
 }
 
-export function computeGrades(subject: Pick<Subject, 'evaluation'>): SubjectGrades {
-  const items = subject.evaluation
+const virtualItem = (id: string, name: string, weight: number, grade: number | null): EvalItem => ({
+  id,
+  name,
+  weight,
+  groupId: null,
+  grade,
+  minGrade: null,
+  date: null,
+  exam: false,
+  time: null,
+  room: '',
+})
+
+/**
+ * Las partes de la asignatura con el peso que de verdad tienen sobre la nota final.
+ *
+ * Sin bloques es la propia lista. Con bloques, el peso de cada parte se reparte dentro
+ * de su bloque (que pesa lo que pese): un examen del 40 % de un trimestre del 25 % vale
+ * un 10 %. Un bloque sin partes cuenta como pendiente, y uno con recuperación y todo
+ * evaluado se queda en una sola nota (la mayor entre su media y la recuperación). Las
+ * partes sin bloque pesan por sí mismas sobre la nota final.
+ */
+export function effectiveItems(subject: Evaluable): EvalItem[] {
+  const groups = subject.groups ?? []
+  if (!groups.length) return subject.evaluation
+
+  const known = new Set(groups.map((g) => g.id))
+  const out: EvalItem[] = []
+  for (const group of groups) {
+    const members = subject.evaluation.filter((i) => i.groupId === group.id)
+    const sum = members.reduce((s, i) => s + i.weight, 0)
+    if (!members.length || sum <= 0) {
+      out.push(virtualItem(`${group.id}:empty`, group.name, group.weight, null))
+      continue
+    }
+    if (group.recovery !== null && members.every((i) => i.grade !== null)) {
+      const average = members.reduce((s, i) => s + (i.weight / sum) * (i.grade as number), 0)
+      out.push(virtualItem(`${group.id}:group`, group.name, group.weight, Math.max(average, group.recovery)))
+      continue
+    }
+    for (const item of members) out.push({ ...item, weight: (group.weight * item.weight) / sum })
+  }
+  for (const item of subject.evaluation) {
+    if (!item.groupId || !known.has(item.groupId)) out.push(item)
+  }
+  return out
+}
+
+/** Cuánto vale una parte sobre la nota final (en las mismas unidades que `weight`). */
+export function itemWeight(subject: Evaluable, item: EvalItem): number {
+  const group = item.groupId ? (subject.groups ?? []).find((g) => g.id === item.groupId) : undefined
+  if (!group) return item.weight
+  const sum = subject.evaluation.filter((i) => i.groupId === group.id).reduce((s, i) => s + i.weight, 0)
+  return sum > 0 ? (group.weight * item.weight) / sum : item.weight
+}
+
+export interface GroupGrade {
+  group: EvalGroup
+  items: EvalItem[]
+  /** Media de lo ya evaluado dentro del bloque, o null si aún no hay ninguna nota. */
+  average: number | null
+  /** Todas las partes del bloque (y al menos una) tienen nota. */
+  complete: boolean
+  /** Nota del bloque cuando está completo, con la recuperación si mejora la media. */
+  score: number | null
+  /** La recuperación ha mejorado la nota del bloque. */
+  recovered: boolean
+}
+
+/** Resumen de cada bloque, en su orden. Vacío si la asignatura no usa bloques. */
+export function groupGrades(subject: Evaluable): GroupGrade[] {
+  return (subject.groups ?? []).map((group) => {
+    const items = subject.evaluation.filter((i) => i.groupId === group.id)
+    const graded = items.filter((i) => i.grade !== null)
+    const gradedWeight = graded.reduce((s, i) => s + i.weight, 0)
+    const average =
+      graded.length && gradedWeight > 0
+        ? graded.reduce((s, i) => s + i.weight * (i.grade as number), 0) / gradedWeight
+        : null
+    const complete = items.length > 0 && graded.length === items.length
+    const recovered = complete && average !== null && group.recovery !== null && group.recovery > average
+    return {
+      group,
+      items,
+      average,
+      complete,
+      score: complete && average !== null ? (recovered ? (group.recovery as number) : average) : null,
+      recovered,
+    }
+  })
+}
+
+export function computeGrades(subject: Evaluable): SubjectGrades {
+  const items = effectiveItems(subject)
   const totalWeight = items.reduce((sum, i) => sum + i.weight, 0)
   if (!items.length || totalWeight <= 0) {
     return {
@@ -100,13 +195,13 @@ export interface PerItem {
  * mínimo, si es mayor), la nota final alcance el objetivo. La función es
  * monótona en `g`, así que basta una búsqueda binaria.
  */
-export function requiredFor(subject: Pick<Subject, 'evaluation'>, target: number): Need {
+export function requiredFor(subject: Evaluable, target: number): Need {
   const g = computeGrades(subject)
   if (!g.hasData) return { kind: 'empty' }
   if (g.belowMin.length) return { kind: 'blocked', items: g.belowMin }
   if (g.final !== null) return { kind: 'done', final: g.final, reaches: g.final >= target - EPS }
 
-  const pending = subject.evaluation.filter((i) => i.grade === null)
+  const pending = effectiveItems(subject).filter((i) => i.grade === null)
   const total = g.totalWeight
   const pointsAt = (x: number) =>
     g.points + pending.reduce((sum, i) => sum + (i.weight / total) * Math.max(x, i.minGrade ?? 0), 0)

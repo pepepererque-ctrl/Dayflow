@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CalendarDays, Calculator, CheckCircle2, ListChecks, Plus } from 'lucide-react'
+import {
+  AlertTriangle,
+  CalendarDays,
+  Calculator,
+  CheckCircle2,
+  Layers,
+  ListChecks,
+  Plus,
+} from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -8,31 +16,33 @@ import { useToast } from '@/components/ui/Toast'
 import { cn } from '@/lib/cn'
 import { MAX_EVAL_ITEMS } from '@/lib/constants'
 import { diffDays, formatClock, formatShortDate } from '@/lib/date'
-import { PASS_GRADE, computeGrades, formatGrade, requiredFor } from '@/lib/grades'
+import { PASS_GRADE, computeGrades, formatGrade, groupGrades, requiredFor, type GroupGrade } from '@/lib/grades'
 import { useApp } from '@/store/AppStore'
 import { useT } from '@/i18n/I18nProvider'
 import type { EvalItem, Subject } from '@/types'
 import { EvalItemEditor } from './EvalItemEditor'
+import { GroupsEditor } from './GroupsEditor'
 
 const TARGETS = ['5', '6', '7', '8', '9', '10']
 
 /**
- * Nota de una parte, editable en la propia fila: se guarda al salir del campo o
- * con Intro. Una nota fuera de 0-10 no se acepta y el campo vuelve a su valor.
+ * Nota editable en la propia fila: se guarda al salir del campo o con Intro.
+ * Una nota fuera de 0-10 no se acepta y el campo vuelve a su valor.
  */
 function GradeInput({
-  item,
+  value,
+  label,
   onCommit,
   onInvalid,
   low,
 }: {
-  item: EvalItem
+  value: number | null
+  label: string
   onCommit: (grade: number | null) => void
   onInvalid: () => void
   low: boolean
 }) {
-  const t = useT()
-  const shown = item.grade === null ? '' : formatGrade(item.grade)
+  const shown = value === null ? '' : formatGrade(value)
   const [text, setText] = useState(shown)
 
   // Si la nota cambia desde otro sitio (el editor, la nube), el campo la sigue.
@@ -41,7 +51,7 @@ function GradeInput({
   const commit = () => {
     const raw = text.trim().replace(',', '.')
     if (raw === '') {
-      if (item.grade !== null) onCommit(null)
+      if (value !== null) onCommit(null)
       return
     }
     const n = Number(raw)
@@ -52,7 +62,7 @@ function GradeInput({
     }
     const rounded = Math.round(n * 100) / 100
     setText(formatGrade(rounded))
-    if (rounded !== item.grade) onCommit(rounded)
+    if (rounded !== value) onCommit(rounded)
   }
 
   return (
@@ -69,7 +79,7 @@ function GradeInput({
       }}
       inputMode="decimal"
       placeholder="—"
-      aria-label={t('eval.gradeLabel', { name: item.name })}
+      aria-label={label}
       aria-invalid={low}
       className={cn(
         'tnum h-9 w-[4.25rem] shrink-0 rounded-lg border bg-surface text-center text-base font-semibold text-ink',
@@ -97,19 +107,25 @@ export function EvaluationCard({ subject }: { subject: Subject }) {
   const t = useT()
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<EvalItem | null>(null)
+  const [newInGroup, setNewInGroup] = useState<string | null>(null)
+  const [groupsOpen, setGroupsOpen] = useState(false)
   const [target, setTarget] = useState('7')
 
   const grades = useMemo(() => computeGrades(subject), [subject])
   const targetNum = Number(target)
   const need = useMemo(() => requiredFor(subject, targetNum), [subject, targetNum])
+  const byGroup = useMemo(() => groupGrades(subject), [subject])
   const atLimit = subject.evaluation.length >= MAX_EVAL_ITEMS
+  const grouped = subject.groups.length > 0
+  const ungrouped = subject.evaluation.filter((e) => !e.groupId)
 
-  const openEditor = (item: EvalItem | null) => {
+  const openEditor = (item: EvalItem | null, groupId: string | null = null) => {
     if (!item && atLimit) {
       toast(t('eval.limit'), { tone: 'error' })
       return
     }
     setEditing(item)
+    setNewInGroup(groupId)
     setEditorOpen(true)
   }
 
@@ -118,6 +134,13 @@ export function EvaluationCard({ subject }: { subject: Subject }) {
       type: 'patchSubject',
       id: subject.id,
       patch: { evaluation: subject.evaluation.map((e) => (e.id === id ? { ...e, grade } : e)) },
+    })
+
+  const setRecovery = (groupId: string, recovery: number | null) =>
+    dispatch({
+      type: 'patchSubject',
+      id: subject.id,
+      patch: { groups: subject.groups.map((g) => (g.id === groupId ? { ...g, recovery } : g)) },
     })
 
   // Con todo evaluado, la asignatura tiene veredicto: se ofrece reflejarlo en su estado.
@@ -141,6 +164,107 @@ export function EvaluationCard({ subject }: { subject: Subject }) {
         ? t('exams.countTomorrow')
         : t('exams.countDays', { n: days })
 
+  /** Una parte: nombre, peso, mínimo, fecha y su nota editable. */
+  const renderItem = (item: EvalItem, weightLabel: string) => {
+    const low = grades.belowMin.some((b) => b.id === item.id)
+    return (
+      <li
+        key={item.id}
+        className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-surface-2"
+      >
+        <button
+          type="button"
+          onClick={() => openEditor(item)}
+          aria-label={t('eval.editItem', { name: item.name })}
+          className="-my-1 min-w-0 flex-1 py-1 text-left"
+        >
+          <p className="truncate text-base font-medium text-ink">{item.name}</p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-ink-3">
+            <span className="tnum font-medium text-ink-2">{weightLabel}</span>
+            {item.minGrade !== null ? (
+              <span className={cn('tnum', low && 'font-medium text-bad')}>
+                {low
+                  ? t('eval.belowMin', { min: formatGrade(item.minGrade) })
+                  : t('eval.min', { n: formatGrade(item.minGrade) })}
+              </span>
+            ) : null}
+            {item.date ? (
+              <span className="inline-flex items-center gap-1">
+                <CalendarDays size={11} />
+                {formatShortDate(item.date)}
+                {item.exam && item.time ? ` · ${formatClock(item.time)}` : ''}
+                {item.exam && item.grade === null && diffDays(item.date, today) >= 0
+                  ? ` · ${countdown(diffDays(item.date, today))}`
+                  : ''}
+              </span>
+            ) : null}
+          </p>
+        </button>
+        <GradeInput
+          value={item.grade}
+          label={t('eval.gradeLabel', { name: item.name })}
+          low={low}
+          onCommit={(grade) => setGrade(item.id, grade)}
+          onInvalid={() => toast(t('eval.gradeInvalid'), { tone: 'error' })}
+        />
+      </li>
+    )
+  }
+
+  /** Un bloque: su peso y su media arriba, sus partes debajo y la recuperación al final. */
+  const renderGroup = (gg: GroupGrade) => {
+    const { group } = gg
+    const summary = gg.score !== null
+      ? t('groups.score', { n: formatGrade(gg.score) })
+      : gg.average !== null
+        ? t('groups.average', { n: formatGrade(gg.average) })
+        : t('groups.noGrades')
+    return (
+      <section key={group.id} className="mt-3 px-2" aria-label={group.name}>
+        <div className="flex items-center gap-2 px-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-semibold text-ink">{group.name}</h3>
+            <p className="tnum mt-0.5 text-xs text-ink-3">
+              {t('groups.ofFinal', { n: formatGrade(group.weight) })} ·{' '}
+              <span className={cn(gg.score !== null && 'font-medium text-ink-2')}>{summary}</span>
+              {gg.recovered ? ` · ${t('groups.recovered')}` : ''}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={t('groups.addToGroup', { name: group.name })}
+            onClick={() => openEditor(null, group.id)}
+          >
+            <Plus size={14} />
+          </Button>
+        </div>
+        {gg.items.length ? (
+          <ul className="mt-1">
+            {gg.items.map((item) => renderItem(item, t('groups.inGroup', { n: formatGrade(item.weight) })))}
+          </ul>
+        ) : (
+          <p className="px-2 pb-1 pt-2 text-xs text-ink-3">{t('groups.emptyGroup')}</p>
+        )}
+        {gg.complete || group.recovery !== null ? (
+          <div className="mt-1 flex items-center gap-3 rounded-xl px-2 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-ink-2">{t('groups.recovery')}</p>
+              <p className="mt-0.5 text-xs text-ink-3">{t('groups.recoveryHint')}</p>
+            </div>
+            <GradeInput
+              value={group.recovery}
+              label={t('groups.recoveryLabel', { name: group.name })}
+              low={false}
+              onCommit={(grade) => setRecovery(group.id, grade)}
+              onInvalid={() => toast(t('eval.gradeInvalid'), { tone: 'error' })}
+            />
+          </div>
+        ) : null}
+      </section>
+    )
+  }
+
   return (
     <Card>
       <CardHeader
@@ -152,10 +276,16 @@ export function EvaluationCard({ subject }: { subject: Subject }) {
             : undefined
         }
         action={
-          <Button size="sm" variant="ghost" onClick={() => openEditor(null)}>
-            <Plus size={14} />
-            {t('eval.add')}
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" onClick={() => setGroupsOpen(true)}>
+              <Layers size={14} />
+              {t('groups.manage')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => openEditor(null)}>
+              <Plus size={14} />
+              {t('eval.add')}
+            </Button>
+          </div>
         }
       />
 
@@ -197,54 +327,26 @@ export function EvaluationCard({ subject }: { subject: Subject }) {
           ) : null}
 
           {/* ------------------------------- partes ------------------------------ */}
-          <ul className="mt-3 px-2">
-            {subject.evaluation.map((item) => {
-              const low = grades.belowMin.some((b) => b.id === item.id)
-              return (
-                <li
-                  key={item.id}
-                  className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-surface-2"
-                >
-                  <button
-                    type="button"
-                    onClick={() => openEditor(item)}
-                    aria-label={t('eval.editItem', { name: item.name })}
-                    className="-my-1 min-w-0 flex-1 py-1 text-left"
-                  >
-                    <p className="truncate text-base font-medium text-ink">{item.name}</p>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-ink-3">
-                      <span className="tnum font-medium text-ink-2">
-                        {t('eval.weight', { n: formatGrade(item.weight) })}
-                      </span>
-                      {item.minGrade !== null ? (
-                        <span className={cn('tnum', low && 'font-medium text-bad')}>
-                          {low
-                            ? t('eval.belowMin', { min: formatGrade(item.minGrade) })
-                            : t('eval.min', { n: formatGrade(item.minGrade) })}
-                        </span>
-                      ) : null}
-                      {item.date ? (
-                        <span className="inline-flex items-center gap-1">
-                          <CalendarDays size={11} />
-                          {formatShortDate(item.date)}
-                          {item.exam && item.time ? ` · ${formatClock(item.time)}` : ''}
-                          {item.exam && item.grade === null && diffDays(item.date, today) >= 0
-                            ? ` · ${countdown(diffDays(item.date, today))}`
-                            : ''}
-                        </span>
-                      ) : null}
-                    </p>
-                  </button>
-                  <GradeInput
-                    item={item}
-                    low={low}
-                    onCommit={(grade) => setGrade(item.id, grade)}
-                    onInvalid={() => toast(t('eval.gradeInvalid'), { tone: 'error' })}
-                  />
-                </li>
-              )
-            })}
-          </ul>
+          {grouped ? (
+            <>
+              {byGroup.map(renderGroup)}
+              {ungrouped.length ? (
+                <section className="mt-3 px-2" aria-label={t('groups.noGroup')}>
+                  <div className="px-2">
+                    <h3 className="text-sm font-semibold text-ink">{t('groups.noGroup')}</h3>
+                    <p className="mt-0.5 text-xs text-ink-3">{t('groups.noGroupHint')}</p>
+                  </div>
+                  <ul className="mt-1">
+                    {ungrouped.map((item) => renderItem(item, t('eval.weight', { n: formatGrade(item.weight) })))}
+                  </ul>
+                </section>
+              ) : null}
+            </>
+          ) : (
+            <ul className="mt-3 px-2">
+              {subject.evaluation.map((item) => renderItem(item, t('eval.weight', { n: formatGrade(item.weight) })))}
+            </ul>
+          )}
 
           {/* ------------------------------ veredicto ---------------------------- */}
           {verdict && subject.status !== verdict ? (
@@ -337,10 +439,13 @@ export function EvaluationCard({ subject }: { subject: Subject }) {
         onClose={() => {
           setEditorOpen(false)
           setEditing(null)
+          setNewInGroup(null)
         }}
         subject={subject}
         item={editing}
+        defaultGroupId={newInGroup}
       />
+      <GroupsEditor open={groupsOpen} onClose={() => setGroupsOpen(false)} subject={subject} />
     </Card>
   )
 }

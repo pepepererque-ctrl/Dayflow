@@ -106,11 +106,29 @@ export interface FocusSession {
 }
 
 /** Una parte de la evaluación: un parcial, unas prácticas, el examen final… */
+/**
+ * Un bloque de la evaluación con su propio peso: un trimestre, o «Exámenes» y «Trabajos».
+ * Las partes del bloque pesan entre sí; el bloque pesa sobre la nota final.
+ */
+export interface EvalGroup {
+  id: string
+  name: string
+  /** Peso del bloque en % sobre la nota final. Si los pesos no suman 100 se calcula en proporción. */
+  weight: number
+  /** Nota de recuperación del bloque, aparte de los exámenes: sustituye a la del bloque si es mayor. */
+  recovery: number | null
+}
+
 export interface EvalItem {
   id: string
   name: string
-  /** Peso en % sobre la nota final. Si los pesos no suman 100 se calcula en proporción. */
+  /**
+   * Peso en %. Sin bloques, sobre la nota final. Con bloques, dentro de su bloque
+   * (o sobre la nota final si la parte no está en ninguno). Si no suman 100 se calcula en proporción.
+   */
   weight: number
+  /** Bloque al que pertenece; null si la asignatura no usa bloques o la parte no está en ninguno. */
+  groupId: string | null
   /** Nota de 0 a 10, o null si todavía no se conoce. */
   grade: number | null
   /** Nota mínima para que la parte haga media, o null si no hay. */
@@ -143,6 +161,8 @@ export interface Subject {
   notes: string
   /** Partes de la evaluación, definidas por el usuario. */
   evaluation: EvalItem[]
+  /** Bloques de la evaluación (trimestres…). Vacío = lista plana de partes. */
+  groups: EvalGroup[]
   createdAt: ISODateTime
 }
 

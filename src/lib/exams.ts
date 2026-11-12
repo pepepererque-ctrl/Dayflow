@@ -1,5 +1,6 @@
 import type { AppState, EvalItem, ISODate, Profile, Subject, TimeBlock } from '@/types'
 import { addDays, dayOfWeek, diffDays, minutesFromClock } from './date'
+import { itemWeight } from './grades'
 import { isOpenSubject } from './subjects'
 import { classesOn } from './timetable'
 
@@ -9,6 +10,8 @@ export interface ExamEntry {
   date: ISODate
   /** Días que faltan (0 = hoy, negativo = ya pasó). */
   days: number
+  /** Lo que vale sobre la nota final, teniendo en cuenta el bloque (trimestre…) si lo hay. */
+  weight: number
 }
 
 /**
@@ -23,7 +26,7 @@ export function listExams(
   for (const subject of subjects) {
     for (const item of subject.evaluation) {
       if (!item.exam || !item.date) continue
-      all.push({ subject, item, date: item.date, days: diffDays(item.date, today) })
+      all.push({ subject, item, date: item.date, days: diffDays(item.date, today), weight: itemWeight(subject, item) })
     }
   }
   const byWhen = (a: ExamEntry, b: ExamEntry) =>
@@ -60,7 +63,7 @@ export function planSummary(blocks: TimeBlock[], examId: string): PlanSummary {
  * examen piden más tiempo. Es solo una sugerencia; el usuario la ajusta.
  */
 export function defaultStudyMinutes(subject: Subject, item: EvalItem): number {
-  const hours = Math.min(30, Math.max(3, Math.round(2 + subject.credits * 0.9 + item.weight / 10)))
+  const hours = Math.min(30, Math.max(3, Math.round(2 + subject.credits * 0.9 + itemWeight(subject, item) / 10)))
   return hours * 60
 }
 

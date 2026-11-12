@@ -160,5 +160,8 @@ export const MAX_BREAKS = 40
 /** Tope de partes de evaluación por asignatura. */
 export const MAX_EVAL_ITEMS = 20
 
+/** Tope de bloques de evaluación (trimestres…) por asignatura. */
+export const MAX_EVAL_GROUPS = 8
+
 export const STORAGE_KEY = 'dayflow.state.v1'
 export const SCHEMA_VERSION = 1

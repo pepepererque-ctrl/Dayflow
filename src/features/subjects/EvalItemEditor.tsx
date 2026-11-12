@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { Checkbox, Field, TextInput } from '@/components/ui/Field'
+import { Checkbox, Field, Select, TextInput } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
 import { useConfirm } from '@/components/ui/Confirm'
 import { useToast } from '@/components/ui/Toast'
@@ -27,6 +27,8 @@ const NAME_SUGGESTIONS = [
 
 interface Draft {
   name: string
+  /** Bloque de la evaluación; vacío si no está en ninguno. */
+  groupId: string
   weight: string
   grade: string
   minGrade: string
@@ -42,9 +44,10 @@ const parseNumber = (text: string): number => Number(text.trim().replace(',', '.
 const fmt = (n: number | null): string => (n === null ? '' : String(n).replace('.', ','))
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-function toDraft(item: EvalItem | null): Draft {
+function toDraft(item: EvalItem | null, defaultGroupId: string | null): Draft {
   return {
     name: item?.name ?? '',
+    groupId: item ? (item.groupId ?? '') : (defaultGroupId ?? ''),
     weight: fmt(item?.weight ?? null),
     grade: fmt(item?.grade ?? null),
     minGrade: fmt(item?.minGrade ?? null),
@@ -61,25 +64,30 @@ export function EvalItemEditor({
   onClose,
   subject,
   item,
+  defaultGroupId = null,
 }: {
   open: boolean
   onClose: () => void
   subject: Subject
   /** null significa "crear una parte nueva". */
   item: EvalItem | null
+  /** Bloque en el que se crea una parte nueva (el del botón «+» que se pulsó). */
+  defaultGroupId?: string | null
 }) {
   const { dispatch } = useApp()
   const { toast } = useToast()
   const confirm = useConfirm()
   const t = useT()
-  const [draft, setDraft] = useState<Draft>(() => toDraft(item))
+  const [draft, setDraft] = useState<Draft>(() => toDraft(item, defaultGroupId))
   const [errors, setErrors] = useState<Errors>({})
+  const groups = subject.groups
+  const group = groups.find((g) => g.id === draft.groupId)
 
   useEffect(() => {
     if (!open) return
     setErrors({})
-    setDraft(toDraft(item))
-  }, [open, item])
+    setDraft(toDraft(item, defaultGroupId))
+  }, [open, item, defaultGroupId])
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((d) => ({ ...d, [key]: value }))
@@ -110,6 +118,7 @@ export function EvalItemEditor({
     const next: EvalItem = {
       id: item?.id ?? uid('ev'),
       name: draft.name.trim(),
+      groupId: groups.some((g) => g.id === draft.groupId) ? draft.groupId : null,
       weight: round2(weight),
       grade: draft.grade.trim() ? round2(parseNumber(draft.grade)) : null,
       minGrade: draft.minGrade.trim() ? round2(parseNumber(draft.minGrade)) : null,
@@ -196,12 +205,25 @@ export function EvalItemEditor({
           </datalist>
         </Field>
 
+        {groups.length ? (
+          <Field label={t('evalEditor.group')} htmlFor="eval-group" hint={t('evalEditor.groupHint')}>
+            <Select id="eval-group" value={draft.groupId} onChange={(e) => set('groupId', e.target.value)}>
+              <option value="">{t('evalEditor.noGroup')}</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
-            label={t('evalEditor.weight')}
+            label={group ? t('evalEditor.weightInGroup') : t('evalEditor.weight')}
             htmlFor="eval-weight"
             error={errors.weight}
-            hint={t('evalEditor.weightHint')}
+            hint={group ? t('evalEditor.weightInGroupHint', { name: group.name }) : t('evalEditor.weightHint')}
             required
           >
             <TextInput

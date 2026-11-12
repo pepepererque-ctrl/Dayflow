@@ -33,7 +33,10 @@ raíz de un dominio o en una subcarpeta, sin reglas de reescritura.
   (tareas, bloques, sesiones de enfoque, clases) cuelga de ellas y toma su color.
 - **Evaluación y notas**: tú defines las partes de cada asignatura (peso, nota, mínimo, fecha). Calcula
   la nota actual, la máxima posible y **qué nota necesitas** para llegar a un objetivo, respetando los
-  mínimos. Nota media del expediente ponderada por créditos.
+  mínimos. Nota media del expediente ponderada por créditos. Cada asignatura puede dividirse en
+  **bloques** con su propio peso (trimestres 25/35/35, o «Exámenes» 80 % y «Trabajos» 20 %): las partes
+  pesan dentro de su bloque y el bloque sobre la nota final. Cada bloque puede tener una **recuperación**
+  aparte de los exámenes (sustituye a la nota del bloque si la mejora). Sin bloques, todo funciona como siempre.
 - **Exámenes**: cuenta atrás, siguiente examen y pasados. **Plan de estudio automático**: reparte
   sesiones entre hoy y la víspera en los huecos libres de la agenda, esquivando clases.
 - **Horario**: clases semanales con varios días a la vez, tipo, aula, periodo de clases y días sin clase.
@@ -57,9 +60,15 @@ raíz de un dominio o en una subcarpeta, sin reglas de reescritura.
   `VITE_SUPABASE_ANON_KEY`.
 - **Qué no se sincroniza**: los ajustes (tema, objetivos) y las preferencias de avisos, que son de cada
   dispositivo.
-- **Conflictos**: si la nube y el dispositivo difieren al iniciar sesión, se pregunta cuál conservar y no
-  se puede cerrar el diálogo sin elegir. Después gana la última escritura; no es un CRDT, así que editar
-  a la vez en dos dispositivos puede perder el cambio más antiguo.
+- **Varios dispositivos**: los cambios se **combinan**, no se pisan (`src/lib/merge.ts`). Cada dispositivo
+  guarda la última versión que coincidía con la nube; al sincronizar compara esa base con lo suyo y con lo
+  de la nube y combina elemento a elemento (por `id`) y campo a campo: lo que añade cada lado se conserva,
+  un borrado se respeta si el otro lado no tocó ese elemento, y si ambos cambian el mismo campo gana el
+  dispositivo que está sincronizando. Borrar en uno y editar en otro conserva la edición. La nube se mira al
+  abrir la app, al volver a ella, al recuperar la red y cada 30 s; se guarda solo si la nube sigue como la
+  dejó este dispositivo (si no, primero se combina). Las listas de días de un hábito se combinan como
+  conjuntos. Si al iniciar sesión hay datos de **otra cuenta** en el dispositivo, se pregunta cuál conservar.
+  Un dispositivo recién estrenado adopta la nube tal cual.
 - **Entrenos**: DayFlow lee las tablas de PepeLift (mismo proyecto de Supabase y mismas cuentas) en solo
   lectura. Nunca escribe en ellas.
 

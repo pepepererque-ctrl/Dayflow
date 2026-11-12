@@ -32,7 +32,7 @@ function ExamFacts({ entry }: { entry: ExamEntry }) {
           {t('exams.room', { room: item.room })}
         </span>
       ) : null}
-      <span className="tnum">{t('exams.weight', { n: formatGrade(item.weight) })}</span>
+      <span className="tnum">{t('exams.weight', { n: formatGrade(entry.weight) })}</span>
     </p>
   )
 }
