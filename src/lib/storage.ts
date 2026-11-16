@@ -363,6 +363,7 @@ function parseSession(raw: unknown): FocusSession | null {
     taskId: typeof raw.taskId === 'string' ? raw.taskId : null,
     goalId: typeof raw.goalId === 'string' ? raw.goalId : null,
     subjectId: typeof raw.subjectId === 'string' ? raw.subjectId : null,
+    examId: typeof raw.examId === 'string' ? raw.examId : null,
     label: str(raw.label, 'Focus session').slice(0, 200),
   }
 }
@@ -457,6 +458,8 @@ export function sanitizeState(raw: unknown): AppState | null {
         taskId: s.taskId && !taskIds.has(s.taskId) ? null : s.taskId,
         goalId: s.goalId && !goalIds.has(s.goalId) ? null : s.goalId,
         subjectId: knownSubject(s.subjectId),
+        // Un examen que ya no existe deja la sesión normal, no huérfana.
+        examId: s.examId && evalIds.has(s.examId) ? s.examId : null,
       })),
   }
 }

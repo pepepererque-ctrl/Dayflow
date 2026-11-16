@@ -400,6 +400,7 @@ function buildSessions(
         taskId: null,
         goalId: null,
         subjectId: null,
+        examId: null,
         // Session labels are only a fallback; the UI shows the linked task when there is one.
         label: 'Focus session',
       })

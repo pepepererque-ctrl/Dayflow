@@ -100,12 +100,14 @@ export interface FocusSession {
   actualMinutes: number
   completed: boolean
   taskId: string | null
+  /** Ya no se elige al enfocar (ahora es el examen); se conserva para el historial de sesiones antiguas. */
   goalId: string | null
   subjectId: string | null
+  /** Parte de la evaluación (examen) para la que se estudió, si se indicó. */
+  examId: string | null
   label: string
 }
 
-/** Una parte de la evaluación: un parcial, unas prácticas, el examen final… */
 /**
  * Un bloque de la evaluación con su propio peso: un trimestre, o «Exámenes» y «Trabajos».
  * Las partes del bloque pesan entre sí; el bloque pesa sobre la nota final.
@@ -127,6 +129,7 @@ export interface EvalGroup {
   parentId: string | null
 }
 
+/** Una parte de la evaluación: un parcial, unas prácticas, el examen final… */
 export interface EvalItem {
   id: string
   name: string

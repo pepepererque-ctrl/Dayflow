@@ -247,8 +247,10 @@ export function GoalDetailPage({ goalId }: { goalId: string }) {
   const deadline = deadlineLabel(goal, today)
   const linkedTasks = state.tasks.filter((t) => t.goalId === goal.id)
   const openTasks = linkedTasks.filter((t) => t.status !== 'done')
+  // Tiempo de enfoque de la meta: el de sus tareas y el de sesiones antiguas vinculadas a ella directamente.
+  const linkedTaskIds = new Set(linkedTasks.map((t) => t.id))
   const focusMinutes = state.sessions
-    .filter((s) => s.goalId === goal.id)
+    .filter((s) => s.goalId === goal.id || (s.taskId !== null && linkedTaskIds.has(s.taskId)))
     .reduce((sum, s) => sum + s.actualMinutes, 0)
 
   const addMilestone = () => {

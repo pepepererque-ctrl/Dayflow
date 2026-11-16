@@ -45,7 +45,7 @@ raíz de un dominio o en una subcarpeta, sin reglas de reescritura.
   hora, prioridad, asignatura y duración. La paleta también busca y navega.
 - **Agenda**: como el calendario del móvil: mes en cuadrícula de colores con el detalle del día debajo, más semana y día con rejilla de horas. Se añade escribiendo en lenguaje natural (tarea o bloque) y, en el móvil, con pulsación larga sobre una hora.
 - **Tareas**: lista y tablero, filtros, arrastrar y soltar (en escritorio).
-- **Hábitos, metas, agenda semanal, modo enfoque (pomodoro) y análisis.**
+- **Hábitos, metas, agenda semanal, modo enfoque (pomodoro) y análisis.** El cronómetro de enfoque se vincula a una asignatura, una tarea y el **examen** para el que estudias; cada examen muestra el tiempo de enfoque acumulado.
 - **App instalable y avisos**: se instala en el móvil u ordenador, abre sin conexión y avisa de clases,
   estudio, entregas y exámenes.
 

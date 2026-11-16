@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CalendarClock, ClipboardCheck, GraduationCap, MapPin, Wand2 } from 'lucide-react'
+import { CalendarClock, ClipboardCheck, GraduationCap, MapPin, Timer, Wand2 } from 'lucide-react'
 import { PageHeader } from '@/components/layout/AppShell'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -41,11 +41,22 @@ function PlanLine({ entry }: { entry: ExamEntry }) {
   const { state } = useApp()
   const t = useT()
   const plan = planSummary(state.blocks, entry.item.id)
-  if (!plan.blocks) return <span className="text-ink-3">{t('exams.planNone')}</span>
+  // Lo que ya se ha estudiado con el cronómetro de enfoque para este examen.
+  const studied = state.sessions.filter((s) => s.examId === entry.item.id).reduce((sum, s) => sum + s.actualMinutes, 0)
+  const studiedText = studied > 0 ? t('exams.studied', { duration: formatDuration(studied) }) : ''
+  if (!plan.blocks) {
+    return (
+      <span className="text-ink-3">
+        {t('exams.planNone')}
+        {studiedText ? <span className="tnum text-ink-2"> · {studiedText}</span> : null}
+      </span>
+    )
+  }
   return (
     <span className="tnum text-ink-2">
       {t('exams.planSummary', { blocks: plan.blocks, duration: formatDuration(plan.minutes) })}
       {plan.doneBlocks ? <span className="text-ink-3"> · {t('exams.planDone', { n: plan.doneBlocks })}</span> : null}
+      {studiedText ? <span> · {studiedText}</span> : null}
     </span>
   )
 }
@@ -91,6 +102,10 @@ function ExamCard({
             <Button size="sm" variant={hasPlan ? 'secondary' : 'primary'} onClick={() => onPlan(entry)}>
               <Wand2 size={14} />
               {hasPlan ? t('exams.planEdit') : t('exams.planButton')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => navigate(`focus?exam=${entry.item.id}`)}>
+              <Timer size={14} />
+              {t('exams.focus')}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => navigate(`subjects/${entry.subject.id}`)}>
               {t('exams.viewSubject')}

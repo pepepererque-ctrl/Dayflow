@@ -19,7 +19,8 @@ import { ProgressRing } from '@/components/ui/Progress'
 import { useToast } from '@/components/ui/Toast'
 import { cn } from '@/lib/cn'
 import { colorVar } from '@/lib/constants'
-import { formatDuration } from '@/lib/date'
+import { formatDuration, formatShortDate } from '@/lib/date'
+import { listExams } from '@/lib/exams'
 import { useT } from '@/i18n/I18nProvider'
 import { useRelativeDay } from '@/i18n/useRelativeDay'
 import { uid } from '@/lib/id'
@@ -73,10 +74,13 @@ export function FocusPage() {
   const [status, setStatus] = useState<Status>('idle')
   const [remaining, setRemaining] = useState((presets[0] ?? 25) * 60_000)
   const [linkTaskId, setLinkTaskId] = useState<string>(route.query.task ?? '')
-  const [linkGoalId, setLinkGoalId] = useState<string>(route.query.goal ?? '')
-  // Si se llega desde una tarea, hereda su asignatura sin que haya que elegirla otra vez.
+  const [linkExamId, setLinkExamId] = useState<string>(route.query.exam ?? '')
+  // Si se llega desde una tarea o un examen, hereda su asignatura sin que haya que elegirla otra vez.
   const [linkSubjectId, setLinkSubjectId] = useState<string>(
-    route.query.subject ?? state.tasks.find((x) => x.id === route.query.task)?.subjectId ?? '',
+    route.query.subject ??
+      state.tasks.find((x) => x.id === route.query.task)?.subjectId ??
+      state.subjects.find((s) => s.evaluation.some((e) => e.id === route.query.exam))?.id ??
+      '',
   )
   const [immersive, setImmersive] = useState(false)
 
@@ -88,7 +92,14 @@ export function FocusPage() {
     () => state.tasks.filter((t) => t.status !== 'done').slice(0, 60),
     [state.tasks],
   )
-  const activeGoals = useMemo(() => state.goals.filter((g) => g.status === 'active'), [state.goals])
+  // Los exámenes por venir y sin nota, más el elegido aunque ya no encaje (para que no desaparezca de la lista).
+  const examChoices = useMemo(() => {
+    const { upcoming, past } = listExams(state.subjects, today)
+    const open = upcoming.filter((e) => e.item.grade === null)
+    if (!linkExamId || open.some((e) => e.item.id === linkExamId)) return open
+    const chosen = [...upcoming, ...past].find((e) => e.item.id === linkExamId)
+    return chosen ? [chosen, ...open] : open
+  }, [state.subjects, today, linkExamId])
   const subjectChoices = useMemo(
     () => state.subjects.filter((s) => isOpenSubject(s) || s.id === linkSubjectId),
     [state.subjects, linkSubjectId],
@@ -111,13 +122,14 @@ export function FocusPage() {
           actualMinutes: Math.round(actualMinutes),
           completed,
           taskId: linkTaskId || null,
-          goalId: linkGoalId || null,
+          goalId: null,
           subjectId: linkSubjectId || null,
+          examId: linkExamId || null,
           label: completed ? t('focus.sessionLabel') : t('focus.sessionLabelEarly'),
         },
       })
     },
-    [dispatch, today, minutes, linkTaskId, linkGoalId, linkSubjectId, t],
+    [dispatch, today, minutes, linkTaskId, linkExamId, linkSubjectId, t],
   )
 
   // Countdown loop.
@@ -245,7 +257,7 @@ export function FocusPage() {
 
   const progress = 1 - remaining / Math.max(1, minutes * 60_000)
   const linkedTask = state.tasks.find((t) => t.id === linkTaskId)
-  const linkedGoal = state.goals.find((g) => g.id === linkGoalId)
+  const linkedExam = examChoices.find((e) => e.item.id === linkExamId)
 
   const timerFace = (
     <div className="flex flex-col items-center">
@@ -264,10 +276,14 @@ export function FocusPage() {
         </span>
       </ProgressRing>
 
-      {linkedTask || linkedGoal ? (
+      {linkedTask || linkedExam ? (
         <p className="mt-5 max-w-xs text-center text-sm text-ink-2">
-          {t('focus.workingOn')}{' '}
-          <span className="font-semibold text-ink">{linkedTask?.title ?? linkedGoal?.title}</span>
+          {linkedTask ? t('focus.workingOn') : t('focus.studyingFor')}{' '}
+          <span className="font-semibold text-ink">
+            {linkedTask
+              ? `${linkedTask.title}${linkedExam ? ` · ${t('focus.forExam', { name: linkedExam.item.name })}` : ''}`
+              : linkedExam?.item.name}
+          </span>
         </p>
       ) : null}
 
@@ -402,7 +418,12 @@ export function FocusPage() {
                 <Select
                   id="focus-subject"
                   value={linkSubjectId}
-                  onChange={(e) => setLinkSubjectId(e.target.value)}
+                  onChange={(e) => {
+                    setLinkSubjectId(e.target.value)
+                    // Un examen de otra asignatura ya no encaja.
+                    const examSubject = state.subjects.find((s) => s.evaluation.some((x) => x.id === linkExamId))
+                    if (examSubject && examSubject.id !== e.target.value) setLinkExamId('')
+                  }}
                   disabled={status === 'running'}
                 >
                   <option value="">{t('focus.noSubject')}</option>
@@ -423,7 +444,6 @@ export function FocusPage() {
                 value={linkTaskId}
                 onChange={(e) => {
                   setLinkTaskId(e.target.value)
-                  if (e.target.value) setLinkGoalId('')
                   const subjectOfTask = state.tasks.find((x) => x.id === e.target.value)?.subjectId
                   if (subjectOfTask) setLinkSubjectId(subjectOfTask)
                 }}
@@ -438,22 +458,24 @@ export function FocusPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="focus-goal" className="text-sm font-medium text-ink-2">
-                {t('focus.linkGoal')}
+              <label htmlFor="focus-exam" className="text-sm font-medium text-ink-2">
+                {t('focus.linkExam')}
               </label>
               <Select
-                id="focus-goal"
-                value={linkGoalId}
+                id="focus-exam"
+                value={linkExamId}
                 onChange={(e) => {
-                  setLinkGoalId(e.target.value)
-                  if (e.target.value) setLinkTaskId('')
+                  setLinkExamId(e.target.value)
+                  // Estudiar para un examen es estudiar esa asignatura.
+                  const entry = examChoices.find((x) => x.item.id === e.target.value)
+                  if (entry) setLinkSubjectId(entry.subject.id)
                 }}
                 disabled={status === 'running'}
               >
-                <option value="">{t('focus.noGoal')}</option>
-                {activeGoals.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.title}
+                <option value="">{t('focus.noExam')}</option>
+                {examChoices.map((x) => (
+                  <option key={x.item.id} value={x.item.id}>
+                    {t('focus.examOption', { name: x.item.name, subject: x.subject.name, date: formatShortDate(x.date) })}
                   </option>
                 ))}
               </Select>
@@ -490,6 +512,9 @@ export function FocusPage() {
                   {recent.map((s) => {
                     const task = s.taskId ? state.tasks.find((t) => t.id === s.taskId) : null
                     const goal = s.goalId ? state.goals.find((g) => g.id === s.goalId) : null
+                    const exam = s.examId
+                      ? state.subjects.flatMap((x) => x.evaluation).find((e) => e.id === s.examId)
+                      : null
                     const subject = s.subjectId ? state.subjects.find((x) => x.id === s.subjectId) : null
                     return (
                       <li
@@ -506,11 +531,12 @@ export function FocusPage() {
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-ink">
-                            {task?.title ?? goal?.title ?? subject?.name ?? t('focus.sessionLabel')}
+                            {task?.title ?? exam?.name ?? goal?.title ?? subject?.name ?? t('focus.sessionLabel')}
                           </p>
                           <p className="truncate text-2xs text-ink-3">
                             {relDay(s.date, today)}
-                            {subject && (task || goal) ? ` · ${subjectShort(subject)}` : ''}
+                            {subject && (task || exam || goal) ? ` · ${subjectShort(subject)}` : ''}
+                            {exam && task ? ` · ${t('focus.forExam', { name: exam.name })}` : ''}
                           </p>
                         </div>
                         <span
